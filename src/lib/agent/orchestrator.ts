@@ -27,6 +27,9 @@ export interface AgentDeps {
 
 // One sandbox per job: created on first use, shared by every check and repair
 // attempt in the job, destroyed when the job ends (unless a preview needs it).
+const HEARTBEAT_MS = 15_000;
+const HEARTBEAT_STALE_MS = 2 * 60_000;
+
 type Job = { cancelled: boolean; promise: Promise<void>; session?: SandboxSession };
 
 function now() {
@@ -54,7 +57,9 @@ export class Agent {
   async get(id: string): Promise<Project> {
     const p = await this.deps.store.get(id);
     if (!p) throw new NotFoundError("Project not found");
-    if (p.busy && !this.jobs.has(id)) {
+    const beat = p.job?.heartbeatAt ?? p.job?.startedAt ?? p.updatedAt;
+    const stale = Date.now() - new Date(beat).getTime() > HEARTBEAT_STALE_MS;
+    if (p.busy && !this.jobs.has(id) && stale) {
       // The server restarted mid-job; don't leave the project stuck.
       p.busy = false;
       p.stage = "failed";
@@ -271,11 +276,17 @@ export class Agent {
     if (p.busy || this.jobs.has(id)) throw new ConflictError("A job is already running for this project.");
     p.busy = true;
     p.lastError = undefined;
-    p.job = { kind, startedAt: now() };
+    p.job = { kind, startedAt: now(), heartbeatAt: now() };
     await this.save(p);
 
     const job: Job = { cancelled: false, promise: Promise.resolve() };
     this.jobs.set(id, job);
+    // Heartbeat so other server instances (or a reloaded module) never mistake
+    // a long model call for a dead job.
+    const heartbeat = setInterval(() => {
+      if (p.job) p.job.heartbeatAt = now();
+      this.save(p).catch(() => undefined);
+    }, HEARTBEAT_MS);
     job.promise = (async () => {
       try {
         await body(p, job);
@@ -292,6 +303,7 @@ export class Agent {
           console.error(`[dualdev] job failed for ${id}:`, err);
         }
       } finally {
+        clearInterval(heartbeat);
         await this.releaseSession(p, job);
         p.busy = false;
         this.jobs.delete(id);

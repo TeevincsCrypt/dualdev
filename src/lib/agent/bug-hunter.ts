@@ -21,6 +21,8 @@ export function selectRelevantFiles(files: Record<string, string>, run: Run): Re
 
   const picked = new Set<string>();
   for (const p of Object.keys(files)) if (evidence.includes(p)) picked.add(p);
+  // A startup failure involves server.js and what it serves, even when the log names neither.
+  if (run.appStarts === false) for (const p of Object.keys(files)) if (p.endsWith(".js") && !isTest(p)) picked.add(p);
 
   // Follow relative imports one level from what we picked.
   for (const p of [...picked]) {
@@ -29,7 +31,7 @@ export function selectRelevantFiles(files: Record<string, string>, run: Run): Re
       if (target in files) picked.add(target);
     }
   }
-  if ([...picked].filter((p) => !isTest(p)).length === 0) {
+  if ([...picked].filter((p) => p.endsWith(".js") && !isTest(p)).length === 0) {
     for (const p of Object.keys(files)) if (p.endsWith(".js") && !isTest(p)) picked.add(p);
   }
   if ("package.json" in files) picked.add("package.json");

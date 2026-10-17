@@ -140,7 +140,7 @@ export interface Project {
   status: ProjectStatus;
   stage: Stage | null;
   busy: boolean;
-  job?: { kind: "build" | "test" | "fix" | "demo" | "preview"; startedAt: string };
+  job?: { kind: "build" | "test" | "fix" | "demo" | "preview"; startedAt: string; heartbeatAt?: string };
   plan?: string;
   limitations?: string;
   files: Record<string, string>;

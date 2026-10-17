@@ -201,3 +201,13 @@ describe("sandbox lifecycle (one sandbox per job)", () => {
     expect(done.lastError).toMatch(/CreateOS dashboard/);
   }, 60_000);
 });
+
+describe("repair context", () => {
+  it("sends server.js and source files when the app fails to start", async () => {
+    const { selectRelevantFiles } = await import("@/lib/agent/bug-hunter");
+    const files = { "package.json": "{}", "server.js": "srv", "src/a.js": "a", "test/a.test.js": "t" };
+    const run = { failures: [{ category: "startup_failure", message: "did not answer" }], tests: null, execs: [], appStarts: false } as never;
+    const picked = Object.keys(selectRelevantFiles(files, run));
+    expect(picked).toEqual(expect.arrayContaining(["server.js", "src/a.js", "package.json"]));
+  });
+});
