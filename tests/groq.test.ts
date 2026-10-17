@@ -69,10 +69,19 @@ describe("GroqProvider (HTTP client, mocked transport)", () => {
     expect(calls.map((c) => c.body.model)).toEqual(["openai/gpt-oss-120b", "openai/gpt-oss-20b"]);
   });
 
+  it("reserves only the output tokens that fit the per-minute limit, and falls back on 413", async () => {
+    process.env.GROQ_API_KEY = "gsk_test";
+    const calls: Call[] = [];
+    const tooLarge = { status: 413, body: { error: { message: "Request too large ... tokens per minute (TPM): Limit 8000" } } };
+    await new GroqProvider(fakeFetch([tooLarge, ok("x")], calls)).generateText({ system: "s".repeat(3200), user: "u", maxTokens: 32000 });
+    expect(calls[0].body.max_completion_tokens).toBeLessThanOrEqual(8000 - 1000);
+    expect(calls[1].body.model).toBe("openai/gpt-oss-20b");
+  });
+
   it("surfaces truncation and auth errors", async () => {
     process.env.GROQ_API_KEY = "gsk_test";
     const trunc = { status: 200, body: { choices: [{ message: { content: "{" }, finish_reason: "length" }] } };
-    await expect(new GroqProvider(fakeFetch([trunc], [])).generateJson(args)).rejects.toThrow(/truncated/);
+    await expect(new GroqProvider(fakeFetch([trunc, trunc, trunc], [])).generateJson(args)).rejects.toThrow(/truncated/);
     await expect(new GroqProvider(fakeFetch([{ status: 401, body: {} }], [])).generateJson(args)).rejects.toThrow(/rejected the API key/);
   });
 });

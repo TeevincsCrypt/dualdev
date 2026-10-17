@@ -12,6 +12,7 @@ export interface OpenAICompatibleConfig {
   apiKeyEnv: string; // name of the env var holding the key
   model: string;
   fallbackModels?: string[]; // tried in order when the model is rate-limited
+  tpmLimit?: number; // tokens-per-minute cap per request (input + reserved output)
 }
 
 /**
@@ -77,7 +78,18 @@ export class OpenAICompatibleProvider implements ModelProvider {
     throw lastErr;
   }
 
-  private async callModel(model: string, system: string, user: string, responseFormat: object | null, maxTokens: number): Promise<string> {
+  /**
+   * Groq counts input + reserved output against the per-minute token limit, so
+   * reserve only what fits under `tpmLimit` (if configured).
+   */
+  private outputBudget(system: string, user: string, requested: number): number {
+    if (!this.cfg.tpmLimit) return requested;
+    const inputEstimate = Math.ceil((system.length + user.length) / 3.2) + 200;
+    return Math.max(1024, Math.min(requested, this.cfg.tpmLimit - inputEstimate));
+  }
+
+  private async callModel(model: string, system: string, user: string, responseFormat: object | null, requestedTokens: number): Promise<string> {
+    const maxTokens = this.outputBudget(system, user, requestedTokens);
     const res = await this.#fetch(`${this.cfg.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${process.env[this.cfg.apiKeyEnv]}` },
@@ -100,17 +112,18 @@ export class OpenAICompatibleProvider implements ModelProvider {
         throw new StructuredOutputError(msg, body.error?.failed_generation);
       }
       if (res.status === 401 || res.status === 403) throw new ModelUnavailableError(`${this.cfg.label} rejected the API key (${res.status}).`);
-      if (res.status === 429) throw new RateLimitError(`${this.cfg.label} rate limit for ${model}: ${msg.slice(0, 300)}`);
+      if (res.status === 429 || res.status === 413) throw new RateLimitError(`${this.cfg.label} rate limit for ${model}: ${msg.slice(0, 300)}`);
       throw new Error(`${this.cfg.label} API error ${res.status}: ${msg.slice(0, 300)}`);
     }
     const choice = body.choices?.[0];
-    if (choice?.finish_reason === "length") throw new Error("Model output was truncated (max tokens reached).");
+    if (choice?.finish_reason === "length") throw new RateLimitError(`Output from ${model} was truncated at ${maxTokens} tokens.`);
     const text = stripFences(choice?.message?.content ?? "");
     if (!text.trim()) throw new Error("Model returned no output.");
     return text;
   }
 }
 
+/** Limits on one model (rate, request size, output length): worth retrying on the next model. */
 class RateLimitError extends Error {}
 
 class StructuredOutputError extends Error {
@@ -141,6 +154,7 @@ export class GroqProvider extends OpenAICompatibleProvider {
         baseUrl: "https://api.groq.com/openai/v1",
         apiKeyEnv: "GROQ_API_KEY",
         model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+        tpmLimit: Number(process.env.GROQ_TPM_LIMIT || 8000),
         fallbackModels: (process.env.GROQ_FALLBACK_MODELS ?? "openai/gpt-oss-20b,llama-3.3-70b-versatile").split(",").map((m) => m.trim()),
       },
       fetchImpl,

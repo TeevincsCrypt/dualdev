@@ -25,7 +25,7 @@ Visual design (critical: the result is shown to the user immediately in a live p
 
 Rules:
 - Implement the behaviour the user asked for; do not stub features or leave TODOs.
-- Keep the project small and coherent: typically 6–10 files.
+- Keep the project small and coherent: typically 6–8 files, and keep the WHOLE response compact (under ~450 lines in total): concise Tailwind markup, a minimal server.js, one small test file. Output length is strictly limited.
 - Write tests that would genuinely catch regressions in the requested behaviour.
 - Do not claim the code was run or tested; it has not been run yet.
 - "plan" is a short bullet list of what you built. "limitations" honestly lists what is out of scope or not covered by tests.

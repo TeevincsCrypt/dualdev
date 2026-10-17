@@ -48,3 +48,19 @@ describe("file-block protocol", () => {
     expect(json).toMatchObject({ summary: "fix", rootCause: "bug", filesChanged: [{ path: "src/a.js", content: "x\n" }] });
   });
 });
+
+describe("tolerant parsing", () => {
+  it("accepts marker variants", () => {
+    const { files } = parseBlocks("**<<<FILE: public/index.html>>>**\n<h1>x</h1>\n<<<end>>>\n<<< FILE `src/a.js` >>>\nexport {}\n<<<END>>>");
+    expect(files.map((f) => f.path)).toEqual(["public/index.html", "src/a.js"]);
+  });
+  it("falls back to markdown headings and fenced blocks", () => {
+    const md = "Here you go.\n\n### public/index.html\n```html\n<h1>Hi</h1>\n```\n\n**src/app.js**\n```js\nconsole.log(1)\n```\n\n```css title=\"public/styles.css\"\nbody{}\n```";
+    const { files } = parseBlocks(md);
+    expect(files).toEqual([
+      { path: "public/index.html", content: "<h1>Hi</h1>\n" },
+      { path: "src/app.js", content: "console.log(1)\n" },
+      { path: "public/styles.css", content: "body{}\n" },
+    ]);
+  });
+});

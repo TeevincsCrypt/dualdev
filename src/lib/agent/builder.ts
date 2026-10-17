@@ -19,8 +19,14 @@ export function validateBuildOutput(raw: string): GeneratedProject {
   } catch {
     throw new Error("Response was not valid JSON");
   }
+  if (Array.isArray((json as { files?: unknown[] })?.files) && (json as { files: unknown[] }).files.length === 0) {
+    throw new Error("The model returned no files. Use the exact <<<FILE path>>> ... <<<END>>> blocks for every file.");
+  }
   const parsed = BuildOutput.safeParse(json);
-  if (!parsed.success) throw new Error(`Response did not match the schema: ${parsed.error.issues[0]?.message}`);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new Error(`Response did not match the schema at "${issue?.path.join(".")}": ${issue?.message}`);
+  }
   const out = parsed.data;
 
   const files: Record<string, string> = {};

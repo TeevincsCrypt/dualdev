@@ -29,7 +29,8 @@ export interface ParsedBlocks {
   files: { path: string; content: string }[];
 }
 
-const MARKER = /^<<<([A-Z_]+)(?:[ \t]+([^>\n]+?))?>>>[ \t]*$/;
+// Tolerates common deviations: "<<<FILE: path>>>", "<<< file path >>>", bold/backtick wrapping.
+const MARKER = /^[*`_\s]*<<<\s*([A-Za-z_]+)\s*:?\s*([^>\n]*?)\s*>>>[*`_\s]*$/;
 
 export function parseBlocks(text: string): ParsedBlocks {
   const lines = text.replace(/\r\n/g, "\n").split("\n");
@@ -47,7 +48,8 @@ export function parseBlocks(text: string): ParsedBlocks {
   for (const line of lines) {
     const m = MARKER.exec(line.trim());
     if (m) {
-      const [, tag, arg] = m;
+      const tag = m[1].toUpperCase();
+      const arg = m[2].replace(/^[`"']|[`"']$/g, "").trim();
       if (tag === "END") {
         flush();
         continue;
@@ -59,7 +61,40 @@ export function parseBlocks(text: string): ParsedBlocks {
     current?.buf.push(line);
   }
   flush(); // tolerate a missing final <<<END>>>
+  if (files.length === 0) files.push(...parseMarkdownFiles(text));
   return { sections, files };
+}
+
+/**
+ * Fallback for models that ignore the markers and answer in markdown: a file
+ * path (heading, bold, "File:" line, or fence info string) followed by a
+ * fenced code block.
+ */
+export function parseMarkdownFiles(text: string): { path: string; content: string }[] {
+  const out: { path: string; content: string }[] = [];
+  const PATH = /([A-Za-z0-9_][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*\.(?:html|css|js|mjs|json|md|svg|txt))/;
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  let pending: string | null = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const fence = /^\s*```([^\n`]*)$/.exec(line);
+    if (fence) {
+      const info = fence[1];
+      const path = PATH.exec(info)?.[1] ?? pending;
+      const body: string[] = [];
+      let j = i + 1;
+      while (j < lines.length && !/^\s*```\s*$/.test(lines[j])) body.push(lines[j++]);
+      i = j;
+      if (path) out.push({ path, content: body.join("\n").replace(/\s+$/, "") + "\n" });
+      pending = null;
+      continue;
+    }
+    if (line.trim()) {
+      const m = PATH.exec(line);
+      pending = m && /^\s*(#{1,6}\s|\*\*|`|file\s*:|path\s*:|[-*]\s)/i.test(line) ? m[1] : null;
+    }
+  }
+  return out;
 }
 
 function stripFence(s: string): string {
