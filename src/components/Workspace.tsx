@@ -222,7 +222,7 @@ function CodeView({ content, empty }: { content?: string; empty: string }) {
         {lines.map((l, i) => (
           <div key={i} className="flex">
             <span className="w-12 shrink-0 select-none pr-4 text-right text-faint/70">{i + 1}</span>
-            <span className="pr-6 text-[#d4d4dc]">{l || " "}</span>
+            <span className="pr-6 text-fg">{l || " "}</span>
           </div>
         ))}
       </pre>
@@ -333,7 +333,7 @@ function TestResults({ runs }: { runs: Run[] }) {
                   <span className={c.ok ? "text-muted" : "text-fg"}>{c.name}</span>
                   {c.durationMs !== undefined && <span className="mono ml-auto shrink-0 text-[11px] text-faint">{c.durationMs.toFixed(1)}ms</span>}
                 </div>
-                {!c.ok && c.error && <pre className="mono mt-1 ml-6 overflow-auto whitespace-pre-wrap rounded border border-bad/20 bg-bad/5 p-2 text-[11.5px] leading-relaxed text-[#fca5a5]">{c.error}{c.location ? `\n\nat ${c.location}` : ""}</pre>}
+                {!c.ok && c.error && <pre className="mono mt-1 ml-6 overflow-auto whitespace-pre-wrap rounded border border-bad/20 bg-bad/5 p-2 text-[11.5px] leading-relaxed text-bad">{c.error}{c.location ? `\n\nat ${c.location}` : ""}</pre>}
               </li>
             ))}
           </ul>
@@ -373,8 +373,8 @@ function ExecRow({ e, open, toggle }: { e: ExecRecord; open: boolean; toggle: ()
       {open && (
         <div className="border-t border-line p-2">
           {e.error && <pre className="mono whitespace-pre-wrap text-[11.5px] text-bad">{e.error}</pre>}
-          <pre className="mono max-h-72 overflow-auto whitespace-pre-wrap text-[11.5px] leading-relaxed text-[#c8c8d0]">{e.stdout || "(no stdout)"}</pre>
-          {e.stderr && <pre className="mono mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-[11.5px] leading-relaxed text-[#fca5a5]">{e.stderr}</pre>}
+          <pre className="mono max-h-72 overflow-auto whitespace-pre-wrap text-[11.5px] leading-relaxed text-fg">{e.stdout || "(no stdout)"}</pre>
+          {e.stderr && <pre className="mono mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-[11.5px] leading-relaxed text-bad">{e.stderr}</pre>}
         </div>
       )}
     </li>
@@ -451,7 +451,7 @@ function Diff({ path, before, after }: { path: string; before: string | null; af
       <pre className="mono max-h-80 overflow-auto py-1 text-[11.5px] leading-[1.55]">
         {lines.map((l, i) =>
           keep.has(i) ? (
-            <div key={i} className={`flex ${l.type === "add" ? "bg-ok/10 text-[#a7f3d0]" : l.type === "del" ? "bg-bad/10 text-[#fecaca]" : "text-faint"}`}>
+            <div key={i} className={`flex ${l.type === "add" ? "bg-ok/10 text-ok" : l.type === "del" ? "bg-bad/10 text-bad" : "text-faint"}`}>
               <span className="w-10 shrink-0 select-none pr-2 text-right opacity-60">{l.oldNo ?? ""}</span>
               <span className="w-10 shrink-0 select-none pr-2 text-right opacity-60">{l.newNo ?? ""}</span>
               <span className="w-4 shrink-0 select-none">{l.type === "add" ? "+" : l.type === "del" ? "−" : " "}</span>

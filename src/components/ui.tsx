@@ -1,14 +1,23 @@
 "use client";
 import type { ProjectStatus } from "@/lib/types";
 
+/** DUALDEV mark: two halves (Build, Fix) of one circle around a shared core. */
+export function LogoMark({ size = 36 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      <path d="M29 12a20 20 0 0 0 0 40z" fill="#4f6f5b" />
+      <path d="M35 12a20 20 0 0 1 0 40z" fill="#8fae98" />
+      <circle cx="32" cy="32" r="5" fill="#e9e8e3" />
+      <circle cx="32" cy="32" r="2.5" fill="#1d1f1d" />
+    </svg>
+  );
+}
+
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <a href="/" className="flex items-center gap-2.5 select-none">
-      <span className="relative grid h-7 w-7 place-items-center rounded-md border border-line-strong bg-panel-2">
-        <span className="absolute left-1.5 top-1.5 h-2 w-2 rounded-[2px] bg-accent" />
-        <span className="absolute bottom-1.5 right-1.5 h-2 w-2 rounded-[2px] bg-accent-2" />
-      </span>
-      {!compact && <span className="text-[15px] font-semibold tracking-[0.18em]">DUALDEV</span>}
+      <LogoMark size={compact ? 30 : 38} />
+      {!compact && <span className="text-[19px] font-bold tracking-tight">DualDev</span>}
       <span className="mono text-[10px] text-faint" title="Build version">{process.env.NEXT_PUBLIC_DUALDEV_BUILD}</span>
     </a>
   );
@@ -50,10 +59,10 @@ export function Button({
   title?: string;
   type?: "button" | "submit";
 }) {
-  const base = "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40";
+  const base = "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40";
   const v = {
-    primary: "bg-accent text-[#0b0b12] hover:bg-[#93a0ff]",
-    secondary: "border border-line-strong bg-panel-2 text-fg hover:border-faint",
+    primary: "bg-accent text-white hover:bg-[#435f4e] shadow-sm",
+    secondary: "border border-line bg-panel text-fg hover:bg-panel-2",
     ghost: "text-muted hover:text-fg",
     danger: "border border-bad/40 text-bad hover:bg-bad/10",
   }[variant];
@@ -66,7 +75,7 @@ export function Button({
 
 export function Panel({ title, right, children, className = "" }: { title?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-panel ${className}`}>
+    <section className={`flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[20px] border border-line bg-panel shadow-[0_1px_2px_rgba(0,0,0,0.03)] ${className}`}>
       {title !== undefined && (
         <header className="flex h-9 shrink-0 items-center justify-between border-b border-line px-3">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{title}</h2>

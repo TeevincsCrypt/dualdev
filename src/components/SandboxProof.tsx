@@ -30,7 +30,7 @@ export function SandboxProof() {
 
   const r = result;
   return (
-    <section className="rounded-xl border border-line bg-panel">
+    <section className="rounded-[22px] border border-line bg-panel shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
       <header className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
         <div>
           <h2 className="text-[13px] font-semibold">CreateOS execution proof</h2>
@@ -49,8 +49,8 @@ export function SandboxProof() {
           <div className="min-w-0">
             {r.error && <p className="mb-2 text-bad">{r.error}</p>}
             <p className="mono text-faint">$ {r.command} → <span className={r.exitCode === 0 ? "text-ok" : "text-bad"}>exit {r.exitCode ?? "—"}</span>{r.execMs !== undefined && ` · ${r.execMs}ms`}</p>
-            <pre className="mono mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded border border-line bg-bg p-2 text-[12px] text-[#d4d4dc]">{r.stdout || "(no stdout)"}</pre>
-            {r.stderr && <pre className="mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded border border-bad/20 bg-bad/5 p-2 text-[12px] text-[#fca5a5]">{r.stderr}</pre>}
+            <pre className="mono mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded border border-line bg-bg p-2 text-[12px] text-fg">{r.stdout || "(no stdout)"}</pre>
+            {r.stderr && <pre className="mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded border border-bad/20 bg-bad/5 p-2 text-[12px] text-bad">{r.stderr}</pre>}
             <button onClick={() => setShowProgram(!showProgram)} className="mt-2 text-[12px] text-accent">{showProgram ? "Hide" : "Show"} program</button>
             {showProgram && <pre className="mono mt-1 overflow-auto rounded border border-line bg-bg p-2 text-[12px] text-muted">{r.program}</pre>}
           </div>

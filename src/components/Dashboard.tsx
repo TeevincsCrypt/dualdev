@@ -58,28 +58,36 @@ export function Dashboard() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 pb-16">
-      <nav className="flex h-16 items-center justify-between">
-        <Logo />
-        <IntegrationStatus status={status} />
+      <nav className="flex flex-wrap items-center justify-between gap-4 pt-8 pb-6">
+        <div className="flex items-center gap-5">
+          <Logo />
+          <div className="hidden border-l border-line-strong pl-5 sm:block">
+            <p className="text-[20px] font-semibold leading-tight">Hello, builder!</p>
+            <p className="text-[13px] text-muted">One AI. Two superpowers. Build and fix.</p>
+          </div>
+        </div>
+        <div className="rounded-full border border-line bg-panel px-4 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+          <IntegrationStatus status={status} />
+        </div>
       </nav>
 
-      <section className="pt-10 pb-8">
-        <p className="text-[12px] font-medium uppercase tracking-[0.2em] text-accent">One AI. Two superpowers.</p>
-        <h1 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight tracking-tight sm:text-[40px]">
-          Describe what you want to build. DUALDEV will create it, run it, and help repair what fails.
-        </h1>
-        <div className="mt-6 grid max-w-3xl gap-3 sm:grid-cols-2">
-          <ModeCard tone="accent" title="Build" body="Turns your description into source code and tests, then runs them in an isolated CreateOS sandbox." />
-          <ModeCard tone="accent-2" title="Fix" body="Reads the real test and runtime output, patches the faulty code, and re-runs the tests to check the repair. At most 3 attempts." />
-        </div>
+      <section className="grid gap-4 pb-6 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Projects" value={projects?.length ?? "—"} />
+        <StatCard label="Passing" value={projects?.filter((p) => p.status === "passing").length ?? "—"} tone="ok" />
+        <StatCard label="Failing" value={projects?.filter((p) => p.status === "failing" || p.status === "error").length ?? "—"} tone="bad" />
+        <StatCard label="Running now" value={projects?.filter((p) => p.busy).length ?? "—"} accent />
+      </section>
+
+      <section className="grid gap-4 pb-6 md:grid-cols-2">
+        <ModeCard tone="accent" title="Build" body="Describe an app. DualDev writes the code and tests, runs them in an isolated CreateOS sandbox, and shows a live preview." />
+        <ModeCard tone="accent-2" title="Fix" body="Reads real test and runtime output, patches the faulty code, and re-runs the tests to verify — at most 3 attempts. Or scan any website for bugs." />
       </section>
 
       <div className="mb-6 space-y-4">
         <MissingConfigNotice status={status} />
-        <SandboxProof />
       </div>
 
-      <section className="rounded-xl border border-line bg-panel p-4">
+      <section className="rounded-[22px] border border-line bg-panel shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-4">
         <label htmlFor="spec" className="text-[12px] font-medium text-muted">New project</label>
         <textarea
           id="spec"
@@ -100,7 +108,7 @@ export function Dashboard() {
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
           <label className="flex items-center gap-2 text-[13px] text-muted">
-            <input type="checkbox" checked={autoFix} onChange={(e) => setAutoFix(e.target.checked)} className="accent-[#7c8cff]" />
+            <input type="checkbox" checked={autoFix} onChange={(e) => setAutoFix(e.target.checked)} className="accent-[#4f6f5b]" />
             Automatically try to fix failing tests (up to 3 attempts)
           </label>
           <div className="flex gap-2">
@@ -116,6 +124,7 @@ export function Dashboard() {
       </section>
 
       <div className="mt-6"><BugHunter /></div>
+      <div className="mt-6"><SandboxProof /></div>
 
       <section className="mt-10">
         <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Recent projects</h2>
@@ -158,14 +167,23 @@ export function Dashboard() {
   );
 }
 
+function StatCard({ label, value, tone, accent }: { label: string; value: number | string; tone?: "ok" | "bad"; accent?: boolean }) {
+  return (
+    <div className={`rounded-[22px] border px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] ${accent ? "border-transparent bg-gradient-to-br from-[#5f8069] to-[#4f6f5b] text-white" : "border-line bg-panel"}`}>
+      <p className={`text-[13px] ${accent ? "text-white/80" : "text-muted"}`}>{label}</p>
+      <p className={`mt-1 text-[28px] font-bold leading-none ${accent ? "" : tone === "ok" ? "text-ok" : tone === "bad" ? "text-bad" : "text-fg"}`}>{value}</p>
+    </div>
+  );
+}
+
 function ModeCard({ title, body, tone }: { title: string; body: string; tone: "accent" | "accent-2" }) {
   return (
-    <div className="rounded-lg border border-line bg-panel px-4 py-3">
-      <div className="flex items-center gap-2">
-        <span className={`h-2 w-2 rounded-[2px] ${tone === "accent" ? "bg-accent" : "bg-accent-2"}`} />
-        <span className="text-[13px] font-semibold">{title}</span>
+    <div className="flex gap-4 rounded-[22px] border border-line bg-panel px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-full ${tone === "accent" ? "bg-accent text-white" : "bg-[#e3ebe5] text-accent"} text-[15px] font-bold`}>{title[0]}</span>
+      <div>
+        <p className="text-[15px] font-semibold">{title}</p>
+        <p className="mt-0.5 text-[13px] leading-relaxed text-muted">{body}</p>
       </div>
-      <p className="mt-1 text-[13px] leading-relaxed text-muted">{body}</p>
     </div>
   );
 }

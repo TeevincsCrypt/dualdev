@@ -23,7 +23,7 @@ export function BugHunter() {
 
   const sev = { high: "text-bad border-bad/40", medium: "text-warn border-warn/40", low: "text-muted border-line-strong" };
   return (
-    <section className="rounded-xl border border-line bg-panel p-4">
+    <section className="rounded-[22px] border border-line bg-panel shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-4">
       <div className="flex items-center gap-2">
         <span className="h-2 w-2 rounded-[2px] bg-accent-2" />
         <h2 className="text-[13px] font-semibold">Bug Hunter: scan a website</h2>
