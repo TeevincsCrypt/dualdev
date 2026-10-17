@@ -1,5 +1,6 @@
 import { CreateosSandboxError } from "@nodeops-createos/sandbox";
 import { createosClient } from "./client";
+import { sandboxName } from "./types";
 import os from "node:os";
 import { redact, truncate } from "../security/validation";
 
@@ -76,6 +77,7 @@ export async function runCreateOSProof(): Promise<ProofResult> {
       shape: process.env.CREATEOS_SANDBOX_SHAPE || "s-1vcpu-1gb",
       rootfs: process.env.CREATEOS_SANDBOX_ROOTFS || "devbox:1",
       egress: ["registry.npmjs.org:443"],
+      name: sandboxName("proof"),
     });
   } catch (e) {
     return { ...base, finishedAt: new Date().toISOString(), error: `Sandbox creation failed: ${redact(describe(e))}` };

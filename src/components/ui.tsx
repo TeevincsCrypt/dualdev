@@ -9,6 +9,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
         <span className="absolute bottom-1.5 right-1.5 h-2 w-2 rounded-[2px] bg-accent-2" />
       </span>
       {!compact && <span className="text-[15px] font-semibold tracking-[0.18em]">DUALDEV</span>}
+      <span className="mono text-[10px] text-faint" title="Build version">{process.env.NEXT_PUBLIC_DUALDEV_BUILD}</span>
     </a>
   );
 }

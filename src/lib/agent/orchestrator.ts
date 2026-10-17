@@ -334,7 +334,12 @@ export class Agent {
       session = await this.deps.sandbox.acquire(reuse);
     } catch (err) {
       if (!(err instanceof SandboxQuotaError)) throw err;
-      const freed = await this.reclaimStaleSandboxes(p.id);
+      let freed = await this.reclaimStaleSandboxes(p.id);
+      if (freed === 0 && this.deps.sandbox.reclaimOrphans) {
+        const keep = [...this.jobs.values()].flatMap((j) => (j.session ? [j.session.id] : []));
+        for (const other of await this.deps.store.list()) if (other.preview && other.sandboxId) keep.push(other.sandboxId);
+        freed = await this.deps.sandbox.reclaimOrphans(keep).catch(() => 0);
+      }
       if (freed === 0) {
         throw new SandboxQuotaError(
           `${err.message} Stop the live preview on another project, or destroy running sandboxes in the CreateOS dashboard, then retry.`,

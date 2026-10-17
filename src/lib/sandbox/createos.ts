@@ -2,14 +2,13 @@ import {
   type CreateosSandboxClient,
   CreateosSandboxError,
   CreateosSandboxNotFoundError,
-  CreateosSandboxRateLimitError,
   Sandbox,
 } from "@nodeops-createos/sandbox";
 import path from "node:path";
 import type { ExecRecord } from "../types";
 import { createosClient, createosClientOptions } from "./client";
 import { redact, truncate, validateRelativePath } from "../security/validation";
-import { SandboxQuotaError, SandboxUnavailableError, type SandboxProvider, type SandboxSession } from "./types";
+import { isQuotaError, SANDBOX_NAME_PREFIX, sandboxName, SandboxQuotaError, SandboxUnavailableError, type SandboxProvider, type SandboxSession } from "./types";
 
 export const WORKDIR = "/root/app";
 const SHAPE = process.env.CREATEOS_SANDBOX_SHAPE || "s-1vcpu-1gb";
@@ -149,23 +148,34 @@ export class CreateOSProvider implements SandboxProvider {
         }
         if (sb.status === "running") return new CreateOSSession(sb);
       } catch (err) {
-        if (err instanceof CreateosSandboxRateLimitError && /quota/i.test(err.message)) throw this.quotaError(err);
+        if (isQuotaError(err)) throw this.quotaError(err);
         // Unusable (gone, stuck or failed to resume): discard it and start fresh.
       }
       await this.destroy(existingId).catch(() => undefined);
     }
+    const request = { shape: SHAPE, rootfs: ROOTFS, egress: EGRESS, auto_pause_after_seconds: AUTO_PAUSE_SECONDS };
     try {
-      const sb = await client.createSandbox({
-        shape: SHAPE,
-        rootfs: ROOTFS,
-        egress: EGRESS,
-        auto_pause_after_seconds: AUTO_PAUSE_SECONDS,
-      });
-      return new CreateOSSession(sb);
+      try {
+        return new CreateOSSession(await client.createSandbox({ ...request, name: sandboxName() }));
+      } catch (err) {
+        // If the control plane rejects our name format, create without one.
+        if (isQuotaError(err) || (err as { statusCode?: number }).statusCode !== 400) throw err;
+        return new CreateOSSession(await client.createSandbox(request));
+      }
     } catch (err) {
-      if (err instanceof CreateosSandboxRateLimitError && /quota/i.test(err.message)) throw this.quotaError(err);
+      if (isQuotaError(err)) throw this.quotaError(err);
       throw new SandboxUnavailableError(`Sandbox creation failed: ${describe(err)}`);
     }
+  }
+
+  async reclaimOrphans(keep: string[]): Promise<number> {
+    const running = await this.client().listSandboxes({ status: "running" });
+    let freed = 0;
+    for (const sb of running) {
+      if (!sb.name?.startsWith(SANDBOX_NAME_PREFIX) || keep.includes(sb.id)) continue;
+      await sb.destroy().then(() => freed++, () => undefined);
+    }
+    return freed;
   }
 
   private quotaError(err: unknown) {
