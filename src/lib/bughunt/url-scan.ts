@@ -96,7 +96,7 @@ export async function scanUrl(raw: string, model: ModelProvider): Promise<UrlSca
     aiError = model.configured().ok ? "The configured model does not support free-text review." : (model.configured() as { reason: string }).reason;
   } else {
     try {
-      const text = await model.generateText({ system: AI_SYSTEM, user: `URL: ${res.url || url.href}\nHTTP status: ${res.status}\n\n<html_source>\n${html.slice(0, 60_000)}\n</html_source>`, maxTokens: 8000 });
+      const text = await model.generateText({ system: AI_SYSTEM, user: `URL: ${res.url || url.href}\nHTTP status: ${res.status}\n\n<html_source>\n${html.slice(0, 30_000)}\n</html_source>`, maxTokens: 4000 });
       for (const line of text.split("\n")) {
         const parts = line.split("|").map((x) => x.trim());
         if (parts.length < 4) continue;

@@ -60,6 +60,15 @@ describe("GroqProvider (HTTP client, mocked transport)", () => {
     expect(calls[1].body.response_format).toEqual({ type: "json_object" });
   });
 
+  it("falls back to the next Groq model when one is rate-limited", async () => {
+    process.env.GROQ_API_KEY = "gsk_test";
+    const calls: Call[] = [];
+    const limited = { status: 429, body: { error: { message: "Rate limit reached on tokens per day (TPD)" } } };
+    const out = await new GroqProvider(fakeFetch([limited, ok("<<<NAME>>>\nx")], calls)).generateText({ system: "s", user: "u" });
+    expect(out).toContain("<<<NAME>>>");
+    expect(calls.map((c) => c.body.model)).toEqual(["openai/gpt-oss-120b", "openai/gpt-oss-20b"]);
+  });
+
   it("surfaces truncation and auth errors", async () => {
     process.env.GROQ_API_KEY = "gsk_test";
     const trunc = { status: 200, body: { choices: [{ message: { content: "{" }, finish_reason: "length" }] } };

@@ -11,6 +11,7 @@ export interface OpenAICompatibleConfig {
   baseUrl: string; // e.g. https://api.groq.com/openai/v1
   apiKeyEnv: string; // name of the env var holding the key
   model: string;
+  fallbackModels?: string[]; // tried in order when the model is rate-limited
 }
 
 /**
@@ -56,12 +57,32 @@ export class OpenAICompatibleProvider implements ModelProvider {
     return this.call(system, user, null, maxTokens);
   }
 
+  /** Models to try in order: the configured one, then fallbacks (each has its own rate limits on Groq). */
+  private models(): string[] {
+    const extra = (this.cfg.fallbackModels ?? []).filter((m) => m && m !== this.model);
+    return [this.model, ...extra];
+  }
+
   private async call(system: string, user: string, responseFormat: object | null, maxTokens: number): Promise<string> {
+    const models = this.models();
+    let lastErr: unknown;
+    for (const model of models) {
+      try {
+        return await this.callModel(model, system, user, responseFormat, maxTokens);
+      } catch (err) {
+        if (!(err instanceof RateLimitError) || model === models.at(-1)) throw err;
+        lastErr = err; // daily/minute limit on this model: try the next one
+      }
+    }
+    throw lastErr;
+  }
+
+  private async callModel(model: string, system: string, user: string, responseFormat: object | null, maxTokens: number): Promise<string> {
     const res = await this.#fetch(`${this.cfg.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${process.env[this.cfg.apiKeyEnv]}` },
       body: JSON.stringify({
-        model: this.model,
+        model,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -79,6 +100,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
         throw new StructuredOutputError(msg, body.error?.failed_generation);
       }
       if (res.status === 401 || res.status === 403) throw new ModelUnavailableError(`${this.cfg.label} rejected the API key (${res.status}).`);
+      if (res.status === 429) throw new RateLimitError(`${this.cfg.label} rate limit for ${model}: ${msg.slice(0, 300)}`);
       throw new Error(`${this.cfg.label} API error ${res.status}: ${msg.slice(0, 300)}`);
     }
     const choice = body.choices?.[0];
@@ -88,6 +110,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
     return text;
   }
 }
+
+class RateLimitError extends Error {}
 
 class StructuredOutputError extends Error {
   constructor(message: string, readonly failedGeneration?: string) {
@@ -111,6 +135,15 @@ function stripFences(s: string): string {
 
 export class GroqProvider extends OpenAICompatibleProvider {
   constructor(fetchImpl?: typeof fetch) {
-    super({ label: "Groq", baseUrl: "https://api.groq.com/openai/v1", apiKeyEnv: "GROQ_API_KEY", model: process.env.GROQ_MODEL || "openai/gpt-oss-120b" }, fetchImpl);
+    super(
+      {
+        label: "Groq",
+        baseUrl: "https://api.groq.com/openai/v1",
+        apiKeyEnv: "GROQ_API_KEY",
+        model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+        fallbackModels: (process.env.GROQ_FALLBACK_MODELS ?? "openai/gpt-oss-20b,llama-3.3-70b-versatile").split(",").map((m) => m.trim()),
+      },
+      fetchImpl,
+    );
   }
 }

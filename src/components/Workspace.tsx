@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { diffLines, diffStats } from "@/lib/diff";
 import { buildPreviewDocument, findEntry } from "@/lib/preview";
 import type { ActivityEvent, ExecRecord, Project, RepairSession, Run, Stage } from "@/lib/types";
@@ -469,6 +469,7 @@ function Diff({ path, before, after }: { path: string; before: string | null; af
 function Preview({ p, onStart, onStop }: { p: ProjectView; onStart: () => void; onStop: () => void }) {
   const [mode, setMode] = useState<"instant" | "live">(p.preview ? "live" : "instant");
   const doc = useMemo(() => buildPreviewDocument(p.files), [p.files]);
+  const frameBox = useRef<HTMLDivElement>(null);
   if (!Object.keys(p.files).length) return <p className="p-4 text-[13px] text-faint">{p.busy ? "Generating… the preview appears as soon as the code exists." : "No files yet. Click Build to generate the application."}</p>;
   return (
     <div className="flex h-full flex-col">
@@ -484,7 +485,15 @@ function Preview({ p, onStart, onStop }: { p: ProjectView; onStart: () => void; 
       </div>
       {mode === "instant" ? (
         doc ? (
-          <iframe srcDoc={doc} className="min-h-0 flex-1 bg-white" sandbox="allow-scripts allow-forms allow-modals" title="Instant preview" />
+          <div ref={frameBox} className="relative flex min-h-0 flex-1 flex-col bg-white">
+            <button
+              onClick={() => (document.fullscreenElement ? document.exitFullscreen() : frameBox.current?.requestFullscreen())}
+              className="absolute right-3 bottom-3 z-10 rounded-full bg-[#1d1f1d]/85 px-3 py-1.5 text-[12px] font-medium text-white shadow hover:bg-[#1d1f1d]"
+            >
+              ⤢ Full screen
+            </button>
+            <iframe srcDoc={doc} className="min-h-0 w-full flex-1 bg-white" sandbox="allow-scripts allow-forms allow-modals" title="Instant preview" />
+          </div>
         ) : (
           <p className="p-4 text-[13px] text-faint">No HTML entry file (public/index.html) in this project.</p>
         )
