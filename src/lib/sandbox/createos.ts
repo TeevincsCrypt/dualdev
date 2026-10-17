@@ -2,13 +2,14 @@ import {
   type CreateosSandboxClient,
   CreateosSandboxError,
   CreateosSandboxNotFoundError,
+  CreateosSandboxRateLimitError,
   Sandbox,
 } from "@nodeops-createos/sandbox";
 import path from "node:path";
 import type { ExecRecord } from "../types";
 import { createosClient, createosClientOptions } from "./client";
 import { redact, truncate, validateRelativePath } from "../security/validation";
-import { SandboxUnavailableError, type SandboxProvider, type SandboxSession } from "./types";
+import { SandboxQuotaError, SandboxUnavailableError, type SandboxProvider, type SandboxSession } from "./types";
 
 export const WORKDIR = "/root/app";
 const SHAPE = process.env.CREATEOS_SANDBOX_SHAPE || "s-1vcpu-1gb";
@@ -16,7 +17,10 @@ const ROOTFS = process.env.CREATEOS_SANDBOX_ROOTFS || "devbox:1";
 // Generated apps are zero-dependency, so the sandbox needs no general egress.
 // The API treats an empty list as "allow all", so we pin a narrow allowlist.
 const EGRESS = ["registry.npmjs.org:443"];
-const AUTO_PAUSE_SECONDS = 600;
+// Sandboxes are created per job and destroyed afterwards; auto-pause is only a
+// safety net if the server dies mid-job (paused sandboxes do not hold the
+// account's concurrency slot).
+const AUTO_PAUSE_SECONDS = 300;
 
 function describe(err: unknown): string {
   if (err instanceof CreateosSandboxError) return `${err.name}: ${err.message}`;
@@ -141,14 +145,14 @@ export class CreateOSProvider implements SandboxProvider {
         if (sb.status === "paused" || sb.status === "pausing") {
           if (sb.status === "pausing") await sb.waitUntilPaused({ timeoutMs: 60_000 });
           await sb.resume();
-          await sb.waitUntilRunning({ timeoutMs: 90_000 });
+          await sb.waitUntilRunning({ timeoutMs: 60_000 });
         }
         if (sb.status === "running") return new CreateOSSession(sb);
       } catch (err) {
-        if (!(err instanceof CreateosSandboxNotFoundError)) {
-          throw new SandboxUnavailableError(`Could not reconnect to sandbox ${existingId}: ${describe(err)}`);
-        }
+        if (err instanceof CreateosSandboxRateLimitError && /quota/i.test(err.message)) throw this.quotaError(err);
+        // Unusable (gone, stuck or failed to resume): discard it and start fresh.
       }
+      await this.destroy(existingId).catch(() => undefined);
     }
     try {
       const sb = await client.createSandbox({
@@ -159,8 +163,13 @@ export class CreateOSProvider implements SandboxProvider {
       });
       return new CreateOSSession(sb);
     } catch (err) {
+      if (err instanceof CreateosSandboxRateLimitError && /quota/i.test(err.message)) throw this.quotaError(err);
       throw new SandboxUnavailableError(`Sandbox creation failed: ${describe(err)}`);
     }
+  }
+
+  private quotaError(err: unknown) {
+    return new SandboxQuotaError(`CreateOS concurrent sandbox limit reached (${describe(err)}).`);
   }
 
   async destroy(id: string): Promise<void> {

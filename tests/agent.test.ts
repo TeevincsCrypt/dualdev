@@ -137,3 +137,67 @@ describe("sandbox failures", () => {
     expect(done.events.some((e) => /File sync to sandbox failed: Upload failed/.test(e.message))).toBe(true);
   });
 });
+
+describe("sandbox lifecycle (one sandbox per job)", () => {
+  it("uses one sandbox for the whole job and destroys it afterwards", async () => {
+    const dir = await tempDir();
+    const sandbox = new LocalTestSandbox(path.join(dir, "sb"), 1);
+    const agent = new Agent({ store: new ProjectStore(path.join(dir, "data")), sandbox, model: new ScriptedModel([repair(fixed)]), fixtureDir });
+    const p = await agent.createDemo();
+    await agent.demo(p.id);
+    await agent.wait(p.id);
+    const done = await agent.get(p.id);
+    expect(done.runs).toHaveLength(2);
+    expect(new Set(done.runs.map((r) => r.sandboxId)).size).toBe(1);
+    expect(sandbox.active.size).toBe(0);
+    expect(done.sandboxId).toBeUndefined();
+    expect(sandbox.destroyed).toEqual([done.runs[0].sandboxId]);
+  }, 60_000);
+
+  it("runs jobs for different projects back to back within a quota of 1", async () => {
+    const dir = await tempDir();
+    const sandbox = new LocalTestSandbox(path.join(dir, "sb"), 1);
+    const agent = new Agent({ store: new ProjectStore(path.join(dir, "data")), sandbox, model: new ScriptedModel([]), fixtureDir });
+    for (let i = 0; i < 2; i++) {
+      const p = await agent.createDemo();
+      await agent.test(p.id);
+      await agent.wait(p.id);
+      expect((await agent.get(p.id)).runs).toHaveLength(1);
+    }
+    expect(sandbox.created).toBe(2);
+    expect(sandbox.active.size).toBe(0);
+  }, 60_000);
+
+  it("reclaims a stale DUALDEV sandbox when the quota is hit", async () => {
+    const dir = await tempDir();
+    const store = new ProjectStore(path.join(dir, "data"));
+    const sandbox = new LocalTestSandbox(path.join(dir, "sb"), 1);
+    const agent = new Agent({ store, sandbox, model: new ScriptedModel([]), fixtureDir });
+    // Simulate a sandbox left behind by an earlier server process.
+    const stale = await agent.createDemo();
+    const leaked = await sandbox.acquire(undefined);
+    await store.save({ ...(await store.get(stale.id))!, sandboxId: leaked.id });
+
+    const p = await agent.createDemo();
+    await agent.test(p.id);
+    await agent.wait(p.id);
+    const done = await agent.get(p.id);
+    expect(done.runs).toHaveLength(1);
+    expect(done.events.some((e) => /Freed 1 stale DUALDEV sandbox/.test(e.message))).toBe(true);
+    expect((await store.get(stale.id))!.sandboxId).toBeUndefined();
+  }, 60_000);
+
+  it("explains the quota when nothing can be reclaimed", async () => {
+    const dir = await tempDir();
+    const sandbox = new LocalTestSandbox(path.join(dir, "sb"), 1);
+    await sandbox.acquire(undefined); // held by something DUALDEV does not own
+    const agent = new Agent({ store: new ProjectStore(path.join(dir, "data")), sandbox, model: new ScriptedModel([]), fixtureDir });
+    const p = await agent.createDemo();
+    await agent.test(p.id);
+    await agent.wait(p.id);
+    const done = await agent.get(p.id);
+    expect(done.status).toBe("error");
+    expect(done.lastError).toMatch(/concurrent sandbox limit|quota/i);
+    expect(done.lastError).toMatch(/CreateOS dashboard/);
+  }, 60_000);
+});

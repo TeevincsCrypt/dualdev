@@ -13,9 +13,12 @@ export interface SandboxSession {
 export interface SandboxProvider {
   readonly name: string;
   configured(): { ok: true } | { ok: false; reason: string };
-  /** Reconnect to an existing sandbox (resuming if paused) or create a new one. */
+  /** Reconnect to an existing sandbox (resuming if paused) or create a new one. Throws SandboxQuotaError at the concurrency limit. */
   acquire(existingId: string | undefined): Promise<SandboxSession>;
   destroy(id: string): Promise<void>;
 }
 
 export class SandboxUnavailableError extends Error {}
+
+/** The account's concurrent-sandbox limit is reached. */
+export class SandboxQuotaError extends SandboxUnavailableError {}

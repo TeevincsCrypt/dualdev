@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { ModelProvider } from "@/lib/ai/provider";
-import type { SandboxProvider, SandboxSession } from "@/lib/sandbox/types";
+import { SandboxQuotaError, type SandboxProvider, type SandboxSession } from "@/lib/sandbox/types";
 import type { ExecRecord } from "@/lib/types";
 
 class LocalTestSession implements SandboxSession {
@@ -37,16 +37,24 @@ class LocalTestSession implements SandboxSession {
 export class LocalTestSandbox implements SandboxProvider {
   readonly name = "local-test-sandbox";
   created = 0;
-  constructor(private base: string) {}
+  readonly active = new Set<string>();
+  readonly destroyed: string[] = [];
+  /** Simulates the account's concurrent-sandbox quota. */
+  constructor(private base: string, private limit = Infinity) {}
   configured() {
     return { ok: true as const };
   }
   async acquire(existing?: string) {
-    if (existing) return new LocalTestSession(existing, path.join(this.base, existing));
+    if (existing && this.active.has(existing)) return new LocalTestSession(existing, path.join(this.base, existing));
+    if (this.active.size >= this.limit) throw new SandboxQuotaError(`quota reached (${this.active.size} / ${this.limit})`);
     const id = `sb_test_${++this.created}`;
+    this.active.add(id);
     return new LocalTestSession(id, path.join(this.base, id));
   }
-  async destroy() {}
+  async destroy(id: string) {
+    this.active.delete(id);
+    this.destroyed.push(id);
+  }
 }
 
 export class ScriptedModel implements ModelProvider {

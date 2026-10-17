@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { ModelUnavailableError, type ModelProvider } from "../ai/provider";
 import { ProjectStore } from "../projects/store";
-import { SandboxUnavailableError, type SandboxProvider, type SandboxSession } from "../sandbox/types";
+import { SandboxQuotaError, SandboxUnavailableError, type SandboxProvider, type SandboxSession } from "../sandbox/types";
 import { LIMITS, validateFileSet } from "../security/validation";
 import type { ActivityEvent, Project, RepairAttempt, RepairSession, Run, Stage } from "../types";
 import { applyChanges, proposeRepair } from "./bug-hunter";
@@ -25,7 +25,9 @@ export interface AgentDeps {
   maxRepairAttempts?: number;
 }
 
-type Job = { cancelled: boolean; promise: Promise<void> };
+// One sandbox per job: created on first use, shared by every check and repair
+// attempt in the job, destroyed when the job ends (unless a preview needs it).
+type Job = { cancelled: boolean; promise: Promise<void>; session?: SandboxSession };
 
 function now() {
   return new Date().toISOString();
@@ -196,11 +198,11 @@ export class Agent {
   }
 
   preview(id: string) {
-    return this.start("preview", id, async (p) => {
+    return this.start("preview", id, async (p, job) => {
       if (!("server.js" in p.files)) throw new Error("This project has no server.js to preview.");
       this.setStage(p, "preparing_sandbox", p.status, "Preparing sandbox for preview.");
       await this.save(p);
-      const session = await this.session(p);
+      const session = await this.session(p, job);
       const sync = await session.sync(p.files);
       if (sync.exitCode !== 0) throw new Error(`File sync failed: ${sync.error ?? sync.stderr}`);
       this.setStage(p, "executing", p.status, "Starting preview server on port 3000 and enabling sandbox ingress.");
@@ -213,12 +215,15 @@ export class Agent {
   }
 
   stopPreview(id: string) {
-    return this.start("preview", id, async (p) => {
-      const session = await this.session(p);
-      await session.stopPreview(3000);
+    return this.start("preview", id, async (p, job) => {
+      if (p.preview && p.sandboxId) {
+        const session = await this.session(p, job);
+        await session.stopPreview(3000).catch(() => undefined);
+      }
+      // Clearing the preview lets the job's sandbox be destroyed on release.
       p.preview = undefined;
       p.verification.previewAvailable = false;
-      this.event(p, "completed", "info", "Preview stopped and ingress disabled.");
+      this.event(p, "completed", "info", "Preview stopped.");
     }, { keepStatus: true });
   }
 
@@ -287,6 +292,7 @@ export class Agent {
           console.error(`[dualdev] job failed for ${id}:`, err);
         }
       } finally {
+        await this.releaseSession(p, job);
         p.busy = false;
         this.jobs.delete(id);
         await this.save(p).catch((e) => console.error("[dualdev] failed to persist project", e));
@@ -318,25 +324,75 @@ export class Agent {
     if (job.cancelled) throw new CancelledError("cancelled");
   }
 
-  private async session(p: Project): Promise<SandboxSession> {
-    const session = await this.deps.sandbox.acquire(p.sandboxId);
-    if (session.id !== p.sandboxId) {
-      this.event(p, "preparing_sandbox", "info", `${p.sandboxId ? "Previous sandbox unavailable; created" : "Created"} ${this.deps.sandbox.name} ${session.id}.`);
-      p.sandboxId = session.id;
-      p.preview = undefined;
-      p.verification.previewAvailable = false;
+  private async session(p: Project, job: Job): Promise<SandboxSession> {
+    if (job.session) return job.session;
+    // Only a sandbox serving a live preview is kept between jobs.
+    const reuse = p.preview ? p.sandboxId : undefined;
+    if (p.sandboxId && !reuse) await this.discardSandbox(p, p.sandboxId);
+    let session: SandboxSession;
+    try {
+      session = await this.deps.sandbox.acquire(reuse);
+    } catch (err) {
+      if (!(err instanceof SandboxQuotaError)) throw err;
+      const freed = await this.reclaimStaleSandboxes(p.id);
+      if (freed === 0) {
+        throw new SandboxQuotaError(
+          `${err.message} Stop the live preview on another project, or destroy running sandboxes in the CreateOS dashboard, then retry.`,
+        );
+      }
+      this.event(p, "preparing_sandbox", "info", `Freed ${freed} stale DUALDEV sandbox${freed === 1 ? "" : "es"} to stay within the CreateOS concurrency limit.`);
+      session = await this.deps.sandbox.acquire(undefined);
+    }
+    job.session = session;
+    if (session.id === reuse) {
+      this.event(p, "preparing_sandbox", "info", `Reusing preview sandbox ${session.id}.`);
     } else {
-      this.event(p, "preparing_sandbox", "info", `Reusing sandbox ${session.id}.`);
+      this.event(p, "preparing_sandbox", "info", `Created ${this.deps.sandbox.name} ${session.id}.`);
+      p.sandboxId = session.id;
+      if (p.preview) {
+        p.preview = undefined;
+        p.verification.previewAvailable = false;
+      }
     }
     await this.save(p);
     return session;
+  }
+
+  /** Destroys the job's sandbox unless it is serving a live preview. */
+  private async releaseSession(p: Project, job: Job) {
+    if (!job.session || p.preview) return;
+    await this.discardSandbox(p, job.session.id);
+  }
+
+  private async discardSandbox(p: Project, sandboxId: string) {
+    try {
+      await this.deps.sandbox.destroy(sandboxId);
+      this.event(p, null, "info", `Destroyed sandbox ${sandboxId}.`);
+    } catch (err) {
+      this.event(p, null, "warn", `Could not destroy sandbox ${sandboxId}: ${this.userMessage(err)}`);
+    }
+    if (p.sandboxId === sandboxId) p.sandboxId = undefined;
+  }
+
+  /** Destroys sandboxes DUALDEV recorded for other idle projects. Never touches sandboxes it did not create. */
+  private async reclaimStaleSandboxes(exceptId: string): Promise<number> {
+    let freed = 0;
+    for (const other of await this.deps.store.list()) {
+      if (other.id === exceptId || !other.sandboxId || other.preview || this.jobs.has(other.id)) continue;
+      const fresh = await this.deps.store.get(other.id);
+      if (!fresh?.sandboxId || fresh.busy) continue;
+      await this.discardSandbox(fresh, fresh.sandboxId);
+      await this.save(fresh);
+      freed++;
+    }
+    return freed;
   }
 
   private async check(p: Project, job: Job, kind: Run["kind"], repairAttempt: number | null): Promise<Run> {
     this.checkCancel(job);
     this.setStage(p, kind === "verify" ? "verifying" : "preparing_sandbox", kind === "verify" ? "fixing" : "testing", "Preparing CreateOS sandbox.");
     await this.save(p);
-    const session = await this.session(p);
+    const session = await this.session(p, job);
     const run = await runChecks(session, p.files, { kind, repairAttempt }, async (stage, message) => {
       this.setStage(p, kind === "verify" ? "verifying" : stage, p.status, message);
       await this.save(p);
