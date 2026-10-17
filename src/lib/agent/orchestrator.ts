@@ -165,7 +165,16 @@ export class Agent {
       this.event(p, "generating", "success", `Generated ${Object.keys(gen.files).length} project files (${tests} test file${tests === 1 ? "" : "s"}).`);
       await this.save(p);
 
-      const run = await this.check(p, job, "baseline", null);
+      let run: Run;
+      try {
+        run = await this.check(p, job, "baseline", null);
+      } catch (err) {
+        if (!(err instanceof SandboxUnavailableError)) throw err;
+        // Keep the generated code usable (instant preview) when CreateOS is unavailable.
+        p.status = "draft";
+        this.setStage(p, "completed", "draft", `Code generated. Sandbox checks skipped — ${this.userMessage(err)}`, "warn");
+        return;
+      }
       if (!run.passed && opts.autoFix) await this.repairLoop(p, job, run);
     });
   }

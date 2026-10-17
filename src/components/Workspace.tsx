@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { diffLines, diffStats } from "@/lib/diff";
+import { buildPreviewDocument, findEntry } from "@/lib/preview";
 import type { ActivityEvent, ExecRecord, Project, RepairSession, Run, Stage } from "@/lib/types";
 import { IntegrationStatus, MissingConfigNotice, useIntegrationStatus } from "./IntegrationStatus";
 import { api, Button, Logo, Panel, StatusBadge, timeAgo } from "./ui";
@@ -46,6 +47,15 @@ export function Workspace({ id }: { id: string }) {
   }, [load, p?.busy]);
 
   const files = useMemo(() => Object.keys(p?.files ?? {}).sort(sortFiles), [p?.files]);
+  const hasEntry = useMemo(() => Boolean(p && findEntry(p.files)), [p]);
+  const [autoPreviewed, setAutoPreviewed] = useState(false);
+  useEffect(() => {
+    // Show the result as soon as there is something to look at.
+    if (hasEntry && !autoPreviewed) {
+      setTab("preview");
+      setAutoPreviewed(true);
+    }
+  }, [hasEntry, autoPreviewed]);
   useEffect(() => {
     if (!file && files.length) setFile(files.find((f) => f.startsWith("src/") && !f.endsWith("app.js")) ?? files[0]);
   }, [files, file]);
@@ -457,24 +467,44 @@ function Diff({ path, before, after }: { path: string; before: string | null; af
 }
 
 function Preview({ p, onStart, onStop }: { p: ProjectView; onStart: () => void; onStop: () => void }) {
-  if (!p.files["server.js"]) return <p className="p-4 text-[13px] text-faint">No server.js in this project yet.</p>;
-  if (!p.preview) {
-    return (
-      <div className="p-4 text-[13px] text-muted">
-        <p>Start the app inside its CreateOS sandbox and expose port 3000 through sandbox ingress.</p>
-        <p className="mt-1 text-faint">This enables a public preview URL for this sandbox until you stop it.</p>
-        <div className="mt-3"><Button onClick={onStart} disabled={p.busy}>Start live preview</Button></div>
-      </div>
-    );
-  }
+  const [mode, setMode] = useState<"instant" | "live">(p.preview ? "live" : "instant");
+  const doc = useMemo(() => buildPreviewDocument(p.files), [p.files]);
+  if (!Object.keys(p.files).length) return <p className="p-4 text-[13px] text-faint">{p.busy ? "Generating… the preview appears as soon as the code exists." : "No files yet. Click Build to generate the application."}</p>;
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[12px]">
-        <a href={p.preview.url} target="_blank" rel="noreferrer" className="mono truncate text-accent hover:underline">{p.preview.url}</a>
-        <span className="ml-auto text-faint">started {timeAgo(p.preview.startedAt)}</span>
-        <Button variant="ghost" onClick={onStop} disabled={p.busy}>Stop</Button>
+      <div className="flex items-center gap-1 border-b border-line px-3 py-1.5 text-[12px]">
+        {(["instant", "live"] as const).map((m) => (
+          <button key={m} onClick={() => setMode(m)} className={`rounded px-2 py-0.5 ${mode === m ? "bg-panel-2 text-fg" : "text-faint hover:text-muted"}`}>
+            {m === "instant" ? "Instant (in browser)" : "Live (CreateOS sandbox)"}
+          </button>
+        ))}
+        <span className="ml-auto text-faint">
+          {mode === "instant" ? "Static render of the generated files in an isolated iframe — no server code runs." : p.preview ? `started ${timeAgo(p.preview.startedAt)}` : ""}
+        </span>
       </div>
-      <iframe src={p.preview.url} className="min-h-0 flex-1 bg-white" sandbox="allow-scripts allow-forms allow-same-origin" title="Application preview" />
+      {mode === "instant" ? (
+        doc ? (
+          <iframe srcDoc={doc} className="min-h-0 flex-1 bg-white" sandbox="allow-scripts allow-forms allow-modals" title="Instant preview" />
+        ) : (
+          <p className="p-4 text-[13px] text-faint">No HTML entry file (public/index.html) in this project.</p>
+        )
+      ) : !p.files["server.js"] ? (
+        <p className="p-4 text-[13px] text-faint">No server.js in this project.</p>
+      ) : !p.preview ? (
+        <div className="p-4 text-[13px] text-muted">
+          <p>Runs server.js inside the CreateOS sandbox and exposes port 3000 through sandbox ingress (public URL until stopped).</p>
+          <div className="mt-3"><Button onClick={onStart} disabled={p.busy}>Start live preview</Button></div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[12px]">
+            <a href={p.preview.url} target="_blank" rel="noreferrer" className="mono truncate text-accent hover:underline">{p.preview.url}</a>
+            <span className="ml-auto" />
+            <Button variant="ghost" onClick={onStop} disabled={p.busy}>Stop</Button>
+          </div>
+          <iframe src={p.preview.url} className="min-h-0 flex-1 bg-white" sandbox="allow-scripts allow-forms allow-same-origin" title="Live preview" />
+        </>
+      )}
     </div>
   );
 }
