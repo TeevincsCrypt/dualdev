@@ -101,11 +101,12 @@ describe("model output validation", () => {
   it("accepts a valid build", () => {
     expect(Object.keys(validateBuildOutput(build(files)).files)).toHaveLength(5);
   });
-  it("rejects traversal, dependencies, missing tests and malformed JSON", () => {
-    expect(() => validateBuildOutput(build({ ...files, "../x.js": "" }))).toThrow(/traversal|normalised/);
-    expect(() => validateBuildOutput(build({ ...files, "package.json": '{"type":"module","dependencies":{"react":"1"}}' }))).toThrow(/zero-dependency/);
-    const { ["test/a.test.js"]: _omit, ...noTests } = files;
-    expect(() => validateBuildOutput(build(noTests))).toThrow(/No test files/);
+  it("skips unsafe paths, supplies package.json/server.js, adds a smoke test, rejects malformed JSON", () => {
+    const out = validateBuildOutput(build({ "public/index.html": "<body>hi</body>", "../x.js": "evil", "package.json": '{"dependencies":{"react":"1"}}' }));
+    expect(Object.keys(out.files).sort()).toEqual(["package.json", "public/index.html", "server.js", "test/smoke.test.js"]);
+    expect(out.files["package.json"]).not.toContain("react");
+    expect(out.limitations).toMatch(/smoke test/);
+    expect(() => validateBuildOutput(build({ "src/a.js": "" }))).toThrow(/index.html/);
     expect(() => validateBuildOutput("{not json")).toThrow(/valid JSON/);
   });
   it("rejects repairs creating non-test files or making no change", () => {

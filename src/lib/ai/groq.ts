@@ -58,24 +58,49 @@ export class OpenAICompatibleProvider implements ModelProvider {
     return this.call(system, user, null, maxTokens);
   }
 
-  /** Models to try in order: the configured one, then fallbacks (each has its own rate limits on Groq). */
-  private models(): string[] {
-    const extra = (this.cfg.fallbackModels ?? []).filter((m) => m && m !== this.model);
-    return [this.model, ...extra];
+  #available: Promise<string[] | null> | null = null;
+
+  /** Model ids this API key can use (GET /models), or null if the list is unavailable. Cached. */
+  private availableModels(): Promise<string[] | null> {
+    this.#available ??= this.#fetch(`${this.cfg.baseUrl.replace(/\/+$/, "")}/models`, {
+      headers: { authorization: `Bearer ${process.env[this.cfg.apiKeyEnv]}` },
+      signal: AbortSignal.timeout(15_000),
+    })
+      .then(async (r) => (r.ok ? ((await r.json()) as { data?: { id: string }[] }).data?.map((m) => m.id) ?? null : null))
+      .catch(() => null);
+    return this.#available;
+  }
+
+  /** Fallback order: configured fallbacks this key can use, then other chat models it can use. */
+  private async fallbacks(): Promise<string[]> {
+    const configured = (this.cfg.fallbackModels ?? []).filter((m) => m && m !== this.model);
+    const available = await this.availableModels();
+    if (!available) return configured;
+    const chat = available.filter((id) => /gpt-oss|llama|qwen|kimi|gemma|mistral|deepseek/i.test(id) && !/whisper|guard|tts|playai|distil|compound|vision/i.test(id));
+    const ordered = [...configured.filter((m) => available.includes(m)), ...chat];
+    return [...new Set(ordered)].filter((m) => m !== this.model).slice(0, 4);
   }
 
   private async call(system: string, user: string, responseFormat: object | null, maxTokens: number): Promise<string> {
-    const models = this.models();
     let lastErr: unknown;
-    for (const model of models) {
+    const tried: string[] = [];
+    let queue: string[] = [this.model];
+    let expanded = false;
+    while (queue.length) {
+      const model = queue.shift()!;
+      tried.push(model);
       try {
         return await this.callModel(model, system, user, responseFormat, maxTokens);
       } catch (err) {
-        if (!(err instanceof RateLimitError) || model === models.at(-1)) throw err;
-        lastErr = err; // daily/minute limit on this model: try the next one
+        if (!(err instanceof RateLimitError)) throw err;
+        lastErr = err;
+        if (!expanded) {
+          expanded = true;
+          queue = (await this.fallbacks()).filter((m) => !tried.includes(m));
+        }
       }
     }
-    throw lastErr;
+    throw new Error(`${(lastErr as Error).message} (tried: ${tried.join(", ")})`);
   }
 
   /**
@@ -101,6 +126,9 @@ export class OpenAICompatibleProvider implements ModelProvider {
         ],
         ...(responseFormat ? { response_format: responseFormat } : {}),
         max_completion_tokens: maxTokens,
+        // gpt-oss reasons before answering and that counts against the output
+        // budget; keep it short so the budget goes to the actual files.
+        ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" } : {}),
         temperature: 0.2,
       }),
       signal: AbortSignal.timeout(5 * 60 * 1000),
@@ -112,6 +140,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
         throw new StructuredOutputError(msg, body.error?.failed_generation);
       }
       if (res.status === 401 || res.status === 403) throw new ModelUnavailableError(`${this.cfg.label} rejected the API key (${res.status}).`);
+      if (res.status === 404 && /model/i.test(msg)) throw new RateLimitError(`${this.cfg.label} model ${model} is not available to this key.`);
       if (res.status === 429 || res.status === 413) throw new RateLimitError(`${this.cfg.label} rate limit for ${model}: ${msg.slice(0, 300)}`);
       throw new Error(`${this.cfg.label} API error ${res.status}: ${msg.slice(0, 300)}`);
     }
@@ -155,7 +184,7 @@ export class GroqProvider extends OpenAICompatibleProvider {
         apiKeyEnv: "GROQ_API_KEY",
         model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
         tpmLimit: Number(process.env.GROQ_TPM_LIMIT || 8000),
-        fallbackModels: (process.env.GROQ_FALLBACK_MODELS ?? "openai/gpt-oss-20b,llama-3.3-70b-versatile").split(",").map((m) => m.trim()),
+        fallbackModels: (process.env.GROQ_FALLBACK_MODELS ?? "openai/gpt-oss-20b").split(",").map((m) => m.trim()),
       },
       fetchImpl,
     );

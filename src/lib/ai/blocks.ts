@@ -102,9 +102,38 @@ function stripFence(s: string): string {
   return (m ? m[1] : s).replace(/^\n+/, "").replace(/\s+$/, "") + "\n";
 }
 
+/** Last-resort extraction when the model ignored the format entirely. */
+function salvageFiles(text: string): { path: string; content: string }[] {
+  // 1. A JSON object with a files array.
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try {
+      const obj = JSON.parse(text.slice(start, end + 1)) as { files?: { path?: unknown; content?: unknown }[] };
+      const files = (obj.files ?? []).filter((f) => typeof f.path === "string" && typeof f.content === "string") as { path: string; content: string }[];
+      if (files.length) return files;
+    } catch {
+      /* not JSON */
+    }
+  }
+  // 2. Fenced blocks identified only by language.
+  const byLang: Record<string, string> = { html: "public/index.html", css: "public/styles.css", js: "src/app.js", javascript: "src/app.js" };
+  const out: { path: string; content: string }[] = [];
+  for (const m of text.matchAll(/```(html|css|js|javascript)[^\n]*\n([\s\S]*?)\n```/gi)) {
+    const path = byLang[m[1].toLowerCase()];
+    if (!out.some((f) => f.path === path)) out.push({ path, content: m[2] + "\n" });
+  }
+  if (out.length) return out;
+  // 3. A bare HTML document.
+  const doc = /<!doctype html[\s\S]*<\/html>|<html[\s\S]*<\/html>/i.exec(text);
+  return doc ? [{ path: "public/index.html", content: doc[0] + "\n" }] : [];
+}
+
 /** Converts build blocks to the JSON shape BuildOutput validates. */
 export function buildBlocksToJson(text: string): string {
-  const { sections, files } = parseBlocks(text);
+  const parsed = parseBlocks(text);
+  const sections = parsed.sections;
+  const files = parsed.files.length ? parsed.files : salvageFiles(text);
   return JSON.stringify({ name: sections.NAME ?? "", plan: sections.PLAN ?? "", limitations: sections.LIMITATIONS ?? "", files });
 }
 

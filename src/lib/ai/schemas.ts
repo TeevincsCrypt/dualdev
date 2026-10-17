@@ -3,10 +3,10 @@ import { z } from "zod";
 const file = z.object({ path: z.string(), content: z.string() });
 
 export const BuildOutput = z.object({
-  name: z.string().min(1).max(80),
-  plan: z.string().max(4000),
-  files: z.array(file).min(1).max(40),
-  limitations: z.string().max(2000),
+  name: z.string().max(200),
+  plan: z.string().max(8000),
+  files: z.array(file).max(60),
+  limitations: z.string().max(4000),
 });
 export type BuildOutput = z.infer<typeof BuildOutput>;
 

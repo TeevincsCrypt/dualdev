@@ -64,3 +64,19 @@ describe("tolerant parsing", () => {
     ]);
   });
 });
+
+describe("salvaging replies that ignore the format", () => {
+  it("accepts a bare HTML document", () => {
+    const out = validateBuildOutput(buildBlocksToJson("Sure! Here is your page:\n<!DOCTYPE html><html><body><h1>Coffee</h1></body></html>\nEnjoy."));
+    expect(out.files["public/index.html"]).toContain("<h1>Coffee</h1>");
+    expect(out.files["server.js"]).toBeDefined();
+  });
+  it("accepts JSON with a files array", () => {
+    const out = validateBuildOutput(buildBlocksToJson('{"files":[{"path":"public/index.html","content":"<body>x</body>"}]}'));
+    expect(out.files["public/index.html"]).toBe("<body>x</body>");
+  });
+  it("accepts unlabeled fenced blocks by language", () => {
+    const out = validateBuildOutput(buildBlocksToJson("```html\n<body>hey</body>\n```\n```css\nbody{color:red}\n```"));
+    expect(out.files["public/styles.css"]).toContain("color:red");
+  });
+});

@@ -1,14 +1,12 @@
 import type { Failure, RepairAttempt, Run } from "../types";
 
 export const STACK_CONTRACT = `Target stack (the only one supported):
-- Plain JavaScript ES modules, Node 20+, ZERO npm dependencies. Do not add "dependencies" or "devDependencies".
-- package.json with "type": "module", scripts {"start": "node server.js", "test": "node --test test/"}.
-- Business logic in src/*.js as pure, exported functions with no DOM access, so it is unit-testable in Node.
-- Browser UI in public/index.html (+ optional public/styles.css) loading src/app.js via <script type="module" src="/src/app.js">.
-  src/app.js imports the logic modules and wires them to the DOM. Persist state with localStorage only if the spec asks for persistence, guarded by try/catch.
-- server.js: a zero-dependency node:http static server that serves "/" as public/index.html and files under public/ and src/ only, listening on Number(process.env.PORT || 3000) at host "0.0.0.0".
-- Tests in test/*.test.js using only "node:test" and "node:assert/strict", importing from ../src/*.js. Cover the behaviour in the spec with focused assertions (for a mostly static website, test the small pure helpers in src/, e.g. form validation or content data).
-- File paths are relative, lowercase, using only letters, digits, ".", "_", "-" and "/". No dotfiles, no node_modules, no build step.`;
+- Plain HTML + CSS + JavaScript ES modules. ZERO npm dependencies. No build step.
+- DUALDEV supplies package.json and server.js automatically. Do NOT write them.
+- REQUIRED: public/index.html — the page itself. Optional: public/styles.css, src/app.js (loaded via <script type="module" src="/src/app.js">) and src/*.js helper modules.
+- Put any non-trivial logic in src/*.js as pure exported functions (no DOM access) so it is unit-testable in Node; src/app.js wires them to the DOM. Use localStorage only if persistence is asked for, guarded by try/catch.
+- Tests (recommended): test/*.test.js using only "node:test" and "node:assert/strict", importing from ../src/*.js and covering that logic.
+- File paths are relative, lowercase, using only letters, digits, ".", "_", "-" and "/". No dotfiles, no node_modules.`;
 
 export const BUILD_SYSTEM = `You are the BUILD engine of DUALDEV, an AI software engineer. You turn a product description into a small, complete, working application.
 

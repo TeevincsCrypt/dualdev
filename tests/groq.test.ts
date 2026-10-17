@@ -5,6 +5,7 @@ type Call = { url: string; body: Record<string, unknown>; auth: string };
 
 function fakeFetch(responses: { status: number; body: unknown }[], calls: Call[]): typeof fetch {
   return (async (url: string, init: RequestInit) => {
+    if (url.endsWith("/models")) return new Response(JSON.stringify({ data: [{ id: "openai/gpt-oss-120b" }, { id: "openai/gpt-oss-20b" }, { id: "whisper-large-v3" }, { id: "qwen/qwen3-32b" }] }), { status: 200 });
     calls.push({ url, body: JSON.parse(String(init.body)), auth: new Headers(init.headers).get("authorization") ?? "" });
     const r = responses.shift()!;
     return new Response(JSON.stringify(r.body), { status: r.status });
@@ -76,6 +77,16 @@ describe("GroqProvider (HTTP client, mocked transport)", () => {
     await new GroqProvider(fakeFetch([tooLarge, ok("x")], calls)).generateText({ system: "s".repeat(3200), user: "u", maxTokens: 32000 });
     expect(calls[0].body.max_completion_tokens).toBeLessThanOrEqual(8000 - 1000);
     expect(calls[1].body.model).toBe("openai/gpt-oss-20b");
+  });
+
+  it("skips models the key cannot use and tries other available chat models", async () => {
+    process.env.GROQ_API_KEY = "gsk_test";
+    const calls: Call[] = [];
+    const limited = { status: 429, body: { error: { message: "TPD" } } };
+    const missing = { status: 404, body: { error: { message: "The model does not exist or you do not have access to it." } } };
+    const out = await new GroqProvider(fakeFetch([limited, missing, ok("done")], calls)).generateText({ system: "s", user: "u" });
+    expect(out).toBe("done");
+    expect(calls.map((c) => c.body.model)).toEqual(["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3-32b"]);
   });
 
   it("surfaces truncation and auth errors", async () => {
