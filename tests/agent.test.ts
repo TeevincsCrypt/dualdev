@@ -138,8 +138,8 @@ describe("sandbox failures", () => {
   });
 });
 
-describe("sandbox lifecycle (one sandbox per job)", () => {
-  it("uses one sandbox for the whole job and destroys it afterwards", async () => {
+describe("sandbox lifecycle (one shared sandbox, paused between jobs)", () => {
+  it("uses one sandbox for the whole job and pauses it afterwards", async () => {
     const dir = await tempDir();
     const sandbox = new LocalTestSandbox(path.join(dir, "sb"), 1);
     const agent = new Agent({ store: new ProjectStore(path.join(dir, "data")), sandbox, model: new ScriptedModel([repair(fixed)]), fixtureDir });
@@ -150,11 +150,11 @@ describe("sandbox lifecycle (one sandbox per job)", () => {
     expect(done.runs).toHaveLength(2);
     expect(new Set(done.runs.map((r) => r.sandboxId)).size).toBe(1);
     expect(sandbox.active.size).toBe(0);
-    expect(done.sandboxId).toBeUndefined();
-    expect(sandbox.destroyed).toEqual([done.runs[0].sandboxId]);
+    expect(sandbox.destroyed).toEqual([]);
+    expect([...sandbox.paused]).toEqual([done.runs[0].sandboxId]);
   }, 60_000);
 
-  it("runs jobs for different projects back to back within a quota of 1", async () => {
+  it("reuses the same sandbox across projects (no new creations)", async () => {
     const dir = await tempDir();
     const sandbox = new LocalTestSandbox(path.join(dir, "sb"), 1);
     const agent = new Agent({ store: new ProjectStore(path.join(dir, "data")), sandbox, model: new ScriptedModel([]), fixtureDir });
@@ -164,7 +164,7 @@ describe("sandbox lifecycle (one sandbox per job)", () => {
       await agent.wait(p.id);
       expect((await agent.get(p.id)).runs).toHaveLength(1);
     }
-    expect(sandbox.created).toBe(2);
+    expect(sandbox.created).toBe(1);
     expect(sandbox.active.size).toBe(0);
   }, 60_000);
 

@@ -16,9 +16,9 @@ const ROOTFS = process.env.CREATEOS_SANDBOX_ROOTFS || "devbox:1";
 // Generated apps are zero-dependency, so the sandbox needs no general egress.
 // The API treats an empty list as "allow all", so we pin a narrow allowlist.
 const EGRESS = ["registry.npmjs.org:443"];
-// Sandboxes are created per job and destroyed afterwards; auto-pause is only a
-// safety net if the server dies mid-job (paused sandboxes do not hold the
-// account's concurrency slot).
+// DUALDEV keeps ONE shared sandbox: resumed for each job, paused afterwards.
+// Creating sandboxes is capped per day, so they are never created per job.
+// Auto-pause is a safety net if the server dies mid-job.
 const AUTO_PAUSE_SECONDS = 300;
 
 function describe(err: unknown): string {
@@ -165,6 +165,11 @@ export class CreateOSProvider implements SandboxProvider {
       if (isQuotaError(err)) throw this.quotaError(err);
       throw new SandboxUnavailableError(`Sandbox creation failed: ${describe(err)}`);
     }
+  }
+
+  async park(id: string): Promise<void> {
+    const sb = await Sandbox.connect(id, { ...createosClientOptions(), baseUrl: this.client().baseUrl });
+    if (sb.status === "running") await sb.pause();
   }
 
   async reclaimOrphans(keep: string[]): Promise<number> {

@@ -16,6 +16,8 @@ export interface SandboxProvider {
   /** Reconnect to an existing sandbox (resuming if paused) or create a new one. Throws SandboxQuotaError at the concurrency limit. */
   acquire(existingId: string | undefined): Promise<SandboxSession>;
   destroy(id: string): Promise<void>;
+  /** Pauses a sandbox so it stops holding the concurrency slot but can be resumed (saves the daily creation quota). */
+  park(id: string): Promise<void>;
   /** Destroys running sandboxes DUALDEV created (by name prefix) except `keep`. Returns how many were destroyed. */
   reclaimOrphans?(keep: string[]): Promise<number>;
 }

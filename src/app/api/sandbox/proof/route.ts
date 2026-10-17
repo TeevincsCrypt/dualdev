@@ -16,7 +16,7 @@ export async function GET() {
 export async function POST() {
   return handle(async () => {
     if (running) return fail(409, "A proof run is already in progress.");
-    running = runCreateOSProof();
+    running = runCreateOSProof((await agent().store.getMeta<{ id: string }>("sandbox"))?.id);
     try {
       const result = await running;
       await agent().store.saveMeta("proof", result);

@@ -53,7 +53,7 @@ export class ProjectStore {
   }
 
   /** Small JSON documents outside the project namespace (e.g. the last sandbox proof). */
-  async getMeta<T>(name: "proof"): Promise<T | null> {
+  async getMeta<T>(name: "proof" | "sandbox"): Promise<T | null> {
     try {
       return JSON.parse(await readFile(path.join(this.root, `${name}.json`), "utf8")) as T;
     } catch {
@@ -61,7 +61,7 @@ export class ProjectStore {
     }
   }
 
-  async saveMeta(name: "proof", value: unknown): Promise<void> {
+  async saveMeta(name: "proof" | "sandbox", value: unknown): Promise<void> {
     await mkdir(this.root, { recursive: true });
     const target = path.join(this.root, `${name}.json`);
     const tmp = `${target}.${randomBytes(4).toString("hex")}.tmp`;

@@ -44,15 +44,25 @@ export class LocalTestSandbox implements SandboxProvider {
   configured() {
     return { ok: true as const };
   }
+  readonly paused = new Set<string>();
   async acquire(existing?: string) {
     if (existing && this.active.has(existing)) return new LocalTestSession(existing, path.join(this.base, existing));
     if (this.active.size >= this.limit) throw new SandboxQuotaError(`quota reached (${this.active.size} / ${this.limit})`);
+    if (existing && this.paused.has(existing)) {
+      this.paused.delete(existing);
+      this.active.add(existing);
+      return new LocalTestSession(existing, path.join(this.base, existing));
+    }
     const id = `sb_test_${++this.created}`;
     this.active.add(id);
     return new LocalTestSession(id, path.join(this.base, id));
   }
+  async park(id: string) {
+    if (this.active.delete(id)) this.paused.add(id);
+  }
   async destroy(id: string) {
     this.active.delete(id);
+    this.paused.delete(id);
     this.destroyed.push(id);
   }
 }

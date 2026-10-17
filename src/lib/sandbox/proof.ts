@@ -1,5 +1,5 @@
-import { CreateosSandboxError } from "@nodeops-createos/sandbox";
-import { createosClient } from "./client";
+import { CreateosSandboxError, Sandbox } from "@nodeops-createos/sandbox";
+import { createosClient, createosClientOptions } from "./client";
 import { sandboxName } from "./types";
 import os from "node:os";
 import { redact, truncate } from "../security/validation";
@@ -42,7 +42,7 @@ const describe = (e: unknown) => (e instanceof CreateosSandboxError ? `${e.name}
  * control-plane metadata and in-guest identity next to this server's identity,
  * then destroys the sandbox. Every field comes from real API responses.
  */
-export async function runCreateOSProof(): Promise<ProofResult> {
+export async function runCreateOSProof(sharedId?: string): Promise<ProofResult> {
   const startedAt = new Date().toISOString();
   const host = { hostname: os.hostname(), platform: `${os.platform()} ${os.release()}` };
   const base: ProofResult = {
@@ -71,9 +71,26 @@ export async function runCreateOSProof(): Promise<ProofResult> {
     return { ...base, finishedAt: new Date().toISOString(), error: `Could not authenticate with CreateOS: ${redact(describe(e))}` };
   }
 
-  let sandbox;
+  let sandbox: Sandbox;
+  let reused = false;
   try {
-    sandbox = await client.createSandbox({
+    // Reuse DUALDEV's shared sandbox when there is one: creations are capped per day.
+    if (sharedId) {
+      try {
+        const sb = await Sandbox.connect(sharedId, createosClientOptions());
+        if (sb.status === "paused") {
+          await sb.resume();
+          await sb.waitUntilRunning({ timeoutMs: 60_000 });
+        }
+        if (sb.status === "running") {
+          sandbox = sb;
+          reused = true;
+        }
+      } catch {
+        /* fall through to create */
+      }
+    }
+    sandbox ??= await client.createSandbox({
       shape: process.env.CREATEOS_SANDBOX_SHAPE || "s-1vcpu-1gb",
       rootfs: process.env.CREATEOS_SANDBOX_ROOTFS || "devbox:1",
       egress: ["registry.npmjs.org:443"],
@@ -105,10 +122,13 @@ export async function runCreateOSProof(): Promise<ProofResult> {
     base.error = `Execution failed: ${redact(describe(e))}`;
   } finally {
     try {
-      await sandbox.destroy();
-      base.destroyed = true;
+      if (reused) await sandbox.pause();
+      else {
+        await sandbox.destroy();
+        base.destroyed = true;
+      }
     } catch (e) {
-      base.error = `${base.error ? `${base.error}; ` : ""}destroy failed: ${describe(e)}`;
+      base.error = `${base.error ? `${base.error}; ` : ""}cleanup failed: ${describe(e)}`;
     }
   }
   return { ...base, finishedAt: new Date().toISOString() };

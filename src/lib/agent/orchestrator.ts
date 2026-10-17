@@ -258,7 +258,8 @@ export class Agent {
   async remove(id: string) {
     const p = await this.get(id);
     if (p.busy) throw new ConflictError("A job is running for this project.");
-    if (p.sandboxId && this.deps.sandbox.configured().ok) {
+    const shared = (await this.deps.store.getMeta<{ id: string }>("sandbox"))?.id;
+    if (p.sandboxId && p.sandboxId !== shared && this.deps.sandbox.configured().ok) {
       await this.deps.sandbox.destroy(p.sandboxId).catch(() => undefined);
     }
     await this.deps.store.delete(id);
@@ -274,6 +275,9 @@ export class Agent {
   private async start(kind: NonNullable<Project["job"]>["kind"], id: string, body: (p: Project, job: Job) => Promise<void>, opts: { keepStatus?: boolean } = {}) {
     const p = await this.get(id);
     if (p.busy || this.jobs.has(id)) throw new ConflictError("A job is already running for this project.");
+    if (this.jobs.size > 0) {
+      throw new ConflictError("Another project's job is running. DUALDEV runs one job at a time in its shared CreateOS sandbox; wait for it to finish.");
+    }
     p.busy = true;
     p.lastError = undefined;
     p.job = { kind, startedAt: now(), heartbeatAt: now() };
@@ -338,47 +342,48 @@ export class Agent {
 
   private async session(p: Project, job: Job): Promise<SandboxSession> {
     if (job.session) return job.session;
-    // Only a sandbox serving a live preview is kept between jobs.
-    const reuse = p.preview ? p.sandboxId : undefined;
-    if (p.sandboxId && !reuse) await this.discardSandbox(p, p.sandboxId);
+    // One shared sandbox for all projects, resumed here and paused on release.
+    const shared = (await this.deps.store.getMeta<{ id: string }>("sandbox"))?.id;
     let session: SandboxSession;
     try {
-      session = await this.deps.sandbox.acquire(reuse);
+      session = await this.deps.sandbox.acquire(shared);
     } catch (err) {
       if (!(err instanceof SandboxQuotaError)) throw err;
       let freed = await this.reclaimStaleSandboxes(p.id);
       if (freed === 0 && this.deps.sandbox.reclaimOrphans) {
         const keep = [...this.jobs.values()].flatMap((j) => (j.session ? [j.session.id] : []));
-        for (const other of await this.deps.store.list()) if (other.preview && other.sandboxId) keep.push(other.sandboxId);
+        if (shared) keep.push(shared);
         freed = await this.deps.sandbox.reclaimOrphans(keep).catch(() => 0);
       }
       if (freed === 0) {
         throw new SandboxQuotaError(
-          `${err.message} Stop the live preview on another project, or destroy running sandboxes in the CreateOS dashboard, then retry.`,
+          `${err.message} If this is the daily limit, wait for it to reset or ask a CreateOS operator to raise it; otherwise destroy running sandboxes in the CreateOS dashboard, then retry.`,
         );
       }
-      this.event(p, "preparing_sandbox", "info", `Freed ${freed} stale DUALDEV sandbox${freed === 1 ? "" : "es"} to stay within the CreateOS concurrency limit.`);
-      session = await this.deps.sandbox.acquire(undefined);
+      this.event(p, "preparing_sandbox", "info", `Freed ${freed} stale DUALDEV sandbox${freed === 1 ? "" : "es"} to stay within the CreateOS limits.`);
+      session = await this.deps.sandbox.acquire(shared);
     }
     job.session = session;
-    if (session.id === reuse) {
-      this.event(p, "preparing_sandbox", "info", `Reusing preview sandbox ${session.id}.`);
+    if (session.id === shared) {
+      this.event(p, "preparing_sandbox", "info", `Resumed shared ${this.deps.sandbox.name} ${session.id}.`);
     } else {
-      this.event(p, "preparing_sandbox", "info", `Created ${this.deps.sandbox.name} ${session.id}.`);
-      p.sandboxId = session.id;
-      if (p.preview) {
-        p.preview = undefined;
-        p.verification.previewAvailable = false;
-      }
+      this.event(p, "preparing_sandbox", "info", `Created shared ${this.deps.sandbox.name} ${session.id}.`);
+      await this.deps.store.saveMeta("sandbox", { id: session.id });
     }
+    p.sandboxId = session.id;
     await this.save(p);
     return session;
   }
 
-  /** Destroys the job's sandbox unless it is serving a live preview. */
+  /** Pauses the shared sandbox after a job (frees the concurrency slot, keeps the daily quota), unless a preview is live. */
   private async releaseSession(p: Project, job: Job) {
     if (!job.session || p.preview) return;
-    await this.discardSandbox(p, job.session.id);
+    try {
+      await this.deps.sandbox.park(job.session.id);
+      this.event(p, null, "info", `Paused sandbox ${job.session.id}.`);
+    } catch (err) {
+      this.event(p, null, "warn", `Could not pause sandbox ${job.session.id}: ${this.userMessage(err)}`);
+    }
   }
 
   private async discardSandbox(p: Project, sandboxId: string) {
@@ -395,7 +400,8 @@ export class Agent {
   private async reclaimStaleSandboxes(exceptId: string): Promise<number> {
     let freed = 0;
     for (const other of await this.deps.store.list()) {
-      if (other.id === exceptId || !other.sandboxId || other.preview || this.jobs.has(other.id)) continue;
+      const shared = (await this.deps.store.getMeta<{ id: string }>("sandbox"))?.id;
+      if (other.id === exceptId || !other.sandboxId || other.sandboxId === shared || other.preview || this.jobs.has(other.id)) continue;
       const fresh = await this.deps.store.get(other.id);
       if (!fresh?.sandboxId || fresh.busy) continue;
       await this.discardSandbox(fresh, fresh.sandboxId);
