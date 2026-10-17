@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Task Manager</title>
+  <link rel="stylesheet" href="/public/styles.css" />
+</head>
+<body>
+  <main>
+    <h1>Tasks</h1>
+    <section class="stats">
+      <div><span id="pending">0</span> pending</div>
+      <div><span id="completed">0</span> completed</div>
+    </section>
+    <form id="new-task">
+      <input id="title" placeholder="What needs doing?" required />
+      <select id="priority">
+        <option value="low">Low</option>
+        <option value="medium" selected>Medium</option>
+        <option value="high">High</option>
+      </select>
+      <button>Add</button>
+    </form>
+    <label>Filter
+      <select id="filter">
+        <option value="all">All</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+      </select>
+    </label>
+    <ul id="list"></ul>
+  </main>
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
