@@ -13,9 +13,9 @@ export function LogoMark({ size = 36 }: { size?: number }) {
   );
 }
 
-export function Logo({ compact = false }: { compact?: boolean }) {
+export function Logo({ compact = false, href = "/app" }: { compact?: boolean; href?: string }) {
   return (
-    <a href="/" className="flex items-center gap-2.5 select-none">
+    <a href={href} className="flex items-center gap-2.5 select-none">
       <LogoMark size={compact ? 30 : 38} />
       {!compact && <span className="text-[19px] font-bold tracking-tight">DualDev</span>}
       <span className="mono text-[10px] text-faint" title="Build version">{process.env.NEXT_PUBLIC_DUALDEV_BUILD}</span>

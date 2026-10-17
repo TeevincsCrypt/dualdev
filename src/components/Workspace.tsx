@@ -85,7 +85,7 @@ export function Workspace({ id }: { id: string }) {
     if (!confirm("Delete this project and destroy its sandbox?")) return;
     try {
       await api(`/api/projects/${id}`, { method: "DELETE" });
-      location.href = "/";
+      location.href = "/app";
     } catch (e) {
       setActionError((e as Error).message);
     }
@@ -96,7 +96,7 @@ export function Workspace({ id }: { id: string }) {
       <div className="grid min-h-screen place-items-center text-[14px] text-muted">
         <div className="text-center">
           <p>{loadError}</p>
-          <a href="/" className="mt-2 inline-block text-accent">Back to dashboard</a>
+          <a href="/app" className="mt-2 inline-block text-accent">Back to dashboard</a>
         </div>
       </div>
     );
