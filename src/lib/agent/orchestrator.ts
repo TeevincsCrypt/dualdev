@@ -133,7 +133,7 @@ export class Agent {
   // ---------- jobs ----------
 
   build(id: string, opts: { autoFix: boolean }) {
-    return this.start(id, async (p, job) => {
+    return this.start("build", id, async (p, job) => {
       this.setStage(p, "understanding", "building", `Reading the specification (${p.spec.length} characters).`);
       await this.save(p);
       this.ensureModel();
@@ -160,14 +160,14 @@ export class Agent {
   }
 
   test(id: string) {
-    return this.start(id, async (p, job) => {
+    return this.start("test", id, async (p, job) => {
       if (Object.keys(p.files).length === 0) throw new Error("Nothing to test yet — build the project first.");
       await this.check(p, job, "check", null);
     });
   }
 
   fix(id: string) {
-    return this.start(id, async (p, job) => {
+    return this.start("fix", id, async (p, job) => {
       if (Object.keys(p.files).length === 0) throw new Error("Nothing to fix yet — build the project first.");
       const last = p.runs.at(-1);
       // Always start the repair loop from a fresh, real baseline.
@@ -181,7 +181,7 @@ export class Agent {
   }
 
   demo(id: string) {
-    return this.start(id, async (p, job) => {
+    return this.start("demo", id, async (p, job) => {
       const baseline = await this.check(p, job, "baseline", null);
       if (baseline.passed) {
         this.event(p, "completed", "warn", "Baseline passed — the fixture defect is not present (was it already repaired?). Reset the demo to restore it.");
@@ -192,7 +192,7 @@ export class Agent {
   }
 
   preview(id: string) {
-    return this.start(id, async (p) => {
+    return this.start("preview", id, async (p) => {
       if (!("server.js" in p.files)) throw new Error("This project has no server.js to preview.");
       this.setStage(p, "preparing_sandbox", p.status, "Preparing sandbox for preview.");
       await this.save(p);
@@ -209,7 +209,7 @@ export class Agent {
   }
 
   stopPreview(id: string) {
-    return this.start(id, async (p) => {
+    return this.start("preview", id, async (p) => {
       const session = await this.session(p);
       await session.stopPreview(3000);
       p.preview = undefined;
@@ -257,11 +257,12 @@ export class Agent {
 
   // ---------- internals ----------
 
-  private async start(id: string, body: (p: Project, job: Job) => Promise<void>, opts: { keepStatus?: boolean } = {}) {
+  private async start(kind: NonNullable<Project["job"]>["kind"], id: string, body: (p: Project, job: Job) => Promise<void>, opts: { keepStatus?: boolean } = {}) {
     const p = await this.get(id);
     if (p.busy || this.jobs.has(id)) throw new ConflictError("A job is already running for this project.");
     p.busy = true;
     p.lastError = undefined;
+    p.job = { kind, startedAt: now() };
     await this.save(p);
 
     const job: Job = { cancelled: false, promise: Promise.resolve() };

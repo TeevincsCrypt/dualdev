@@ -22,7 +22,7 @@ class LocalTestSession implements SandboxSession {
   exec(label: string, script: string, timeoutSec: number): Promise<ExecRecord> {
     const started = Date.now();
     return new Promise((resolve) => {
-      execFile("sh", ["-c", `cd ${this.dir} && ${script}`], { timeout: timeoutSec * 1000, env: { PATH: process.env.PATH } }, (err, stdout, stderr) => {
+      execFile("sh", ["-c", `cd ${this.dir} && ${script}`], { timeout: timeoutSec * 1000, env: { PATH: process.env.PATH ?? "", NODE_ENV: "test" } }, (err, stdout, stderr) => {
         const code = err ? ((err as NodeJS.ErrnoException & { code?: number }).code as unknown as number) ?? 1 : 0;
         resolve({ label, command: script, exitCode: typeof code === "number" ? code : 1, stdout, stderr, durationMs: Date.now() - started, timedOut: false });
       });
