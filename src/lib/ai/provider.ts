@@ -5,6 +5,8 @@ export interface ModelProvider {
   configured(): { ok: true } | { ok: false; reason: string };
   /** Returns the raw JSON text produced under the given schema. */
   generateJson(args: { system: string; user: string; schema: Record<string, unknown>; maxTokens?: number }): Promise<string>;
+  /** Optional free-text generation; when present, code is exchanged via the file-block protocol (ai/blocks.ts). */
+  generateText?(args: { system: string; user: string; maxTokens?: number }): Promise<string>;
 }
 
 export class ModelUnavailableError extends Error {}

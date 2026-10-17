@@ -50,7 +50,13 @@ export class OpenAICompatibleProvider implements ModelProvider {
     }
   }
 
-  private async call(system: string, user: string, responseFormat: object, maxTokens: number): Promise<string> {
+  async generateText({ system, user, maxTokens = 32000 }: { system: string; user: string; maxTokens?: number }) {
+    const c = this.configured();
+    if (!c.ok) throw new ModelUnavailableError(c.reason);
+    return this.call(system, user, null, maxTokens);
+  }
+
+  private async call(system: string, user: string, responseFormat: object | null, maxTokens: number): Promise<string> {
     const res = await this.#fetch(`${this.cfg.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${process.env[this.cfg.apiKeyEnv]}` },
@@ -60,7 +66,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
           { role: "system", content: system },
           { role: "user", content: user },
         ],
-        response_format: responseFormat,
+        ...(responseFormat ? { response_format: responseFormat } : {}),
         max_completion_tokens: maxTokens,
         temperature: 0.2,
       }),

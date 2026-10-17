@@ -1,6 +1,7 @@
 import type { ModelProvider } from "../ai/provider";
 import { BUILD_SYSTEM, buildUserPrompt } from "../ai/prompts";
 import { BuildJsonSchema, BuildOutput } from "../ai/schemas";
+import { BUILD_FORMAT, buildBlocksToJson } from "../ai/blocks";
 import { validateFileSet, validateRelativePath } from "../security/validation";
 
 export interface GeneratedProject {
@@ -56,7 +57,10 @@ export function validateBuildOutput(raw: string): GeneratedProject {
 export async function generateProject(model: ModelProvider, spec: string, onRetry?: (reason: string) => void) {
   let lastError: string | undefined;
   for (let i = 0; i < 2; i++) {
-    const raw = await model.generateJson({ system: BUILD_SYSTEM, user: buildUserPrompt(spec, lastError), schema: BuildJsonSchema });
+    const user = buildUserPrompt(spec, lastError);
+    const raw = model.generateText
+      ? buildBlocksToJson(await model.generateText({ system: `${BUILD_SYSTEM}\n\n${BUILD_FORMAT}`, user }))
+      : await model.generateJson({ system: BUILD_SYSTEM, user, schema: BuildJsonSchema });
     try {
       return validateBuildOutput(raw);
     } catch (err) {

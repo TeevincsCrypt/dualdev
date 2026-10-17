@@ -2,6 +2,7 @@ import path from "node:path";
 import type { ModelProvider } from "../ai/provider";
 import { REPAIR_SYSTEM, repairUserPrompt } from "../ai/prompts";
 import { RepairJsonSchema, RepairOutput } from "../ai/schemas";
+import { REPAIR_FORMAT, repairBlocksToJson } from "../ai/blocks";
 import { validateFileSet, validateRelativePath } from "../security/validation";
 import type { FileChange, Failure, RepairAttempt, Run } from "../types";
 
@@ -96,11 +97,9 @@ export async function proposeRepair(
   args: { spec: string; files: Record<string, string>; run: Run; failures: Failure[]; attempt: number; maxAttempts: number; previousAttempts: RepairAttempt[] },
 ): Promise<ValidatedRepair> {
   const relevantFiles = selectRelevantFiles(args.files, args.run);
-  const raw = await model.generateJson({
-    system: REPAIR_SYSTEM,
-    user: repairUserPrompt({ ...args, fileList: Object.keys(args.files).sort(), relevantFiles }),
-    schema: RepairJsonSchema,
-    maxTokens: 32000,
-  });
+  const user = repairUserPrompt({ ...args, fileList: Object.keys(args.files).sort(), relevantFiles });
+  const raw = model.generateText
+    ? repairBlocksToJson(await model.generateText({ system: `${REPAIR_SYSTEM}\n\n${REPAIR_FORMAT}`, user }))
+    : await model.generateJson({ system: REPAIR_SYSTEM, user, schema: RepairJsonSchema, maxTokens: 32000 });
   return validateRepair(raw, args.files);
 }
