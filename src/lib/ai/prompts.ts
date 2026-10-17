@@ -7,12 +7,21 @@ export const STACK_CONTRACT = `Target stack (the only one supported):
 - Browser UI in public/index.html (+ optional public/styles.css) loading src/app.js via <script type="module" src="/src/app.js">.
   src/app.js imports the logic modules and wires them to the DOM. Persist state with localStorage only if the spec asks for persistence, guarded by try/catch.
 - server.js: a zero-dependency node:http static server that serves "/" as public/index.html and files under public/ and src/ only, listening on Number(process.env.PORT || 3000) at host "0.0.0.0".
-- Tests in test/*.test.js using only "node:test" and "node:assert/strict", importing from ../src/*.js. Cover every behaviour in the spec with focused assertions.
+- Tests in test/*.test.js using only "node:test" and "node:assert/strict", importing from ../src/*.js. Cover the behaviour in the spec with focused assertions (for a mostly static website, test the small pure helpers in src/, e.g. form validation or content data).
 - File paths are relative, lowercase, using only letters, digits, ".", "_", "-" and "/". No dotfiles, no node_modules, no build step.`;
 
 export const BUILD_SYSTEM = `You are the BUILD engine of DUALDEV, an AI software engineer. You turn a product description into a small, complete, working application.
 
 ${STACK_CONTRACT}
+
+Visual design (critical: the result is shown to the user immediately in a live preview):
+- It must look like a polished, modern, professionally designed product, not a bare HTML page.
+- In public/index.html load Tailwind via <script src="https://cdn.tailwindcss.com"></script> and a Google Font (e.g. Inter) via <link> to fonts.googleapis.com, and style everything with Tailwind utility classes.
+- Use a clear visual hierarchy, generous spacing, a cohesive colour palette, rounded cards, subtle shadows, hover states, and a responsive layout that works on mobile and desktop.
+- For websites and landing pages include real sections with realistic copy (no lorem ipsum): sticky navbar, hero with headline, subheading and call-to-action buttons, features/benefits grid, social proof or testimonials, pricing or menu where relevant, a final call-to-action, and a footer.
+- Images: use https://images.unsplash.com/photo-... URLs with ?auto=format&fit=crop&w=1200&q=80, or inline SVG. Never reference local image files.
+- Interactive apps: make the UI fully functional (forms, buttons, state updates) and visually polished, with empty states.
+- Keep any extra CSS in public/styles.css; external URLs are allowed only for Tailwind, Google Fonts and images.
 
 Rules:
 - Implement the behaviour the user asked for; do not stub features or leave TODOs.

@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ProjectStatus } from "@/lib/types";
 import { SandboxProof } from "./SandboxProof";
+import { BugHunter } from "./BugHunter";
 import { IntegrationStatus, MissingConfigNotice, useIntegrationStatus } from "./IntegrationStatus";
 import { api, Button, Logo, StatusBadge, timeAgo } from "./ui";
 
@@ -113,6 +114,8 @@ export function Dashboard() {
         </div>
         {error && <p className="mt-3 text-[13px] text-bad">{error}</p>}
       </section>
+
+      <div className="mt-6"><BugHunter /></div>
 
       <section className="mt-10">
         <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">Recent projects</h2>
