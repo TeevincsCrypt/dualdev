@@ -1,0 +1,79 @@
+TAP version 13
+# Subtest: addTask creates a pending task with a priority
+ok 1 - addTask creates a pending task with a priority
+  ---
+  duration_ms: 2.158454
+  type: 'test'
+  ...
+# Subtest: addTask rejects empty titles and unknown priorities
+ok 2 - addTask rejects empty titles and unknown priorities
+  ---
+  duration_ms: 0.447586
+  type: 'test'
+  ...
+# Subtest: toggleTask marks a task as completed
+ok 3 - toggleTask marks a task as completed
+  ---
+  duration_ms: 0.183183
+  type: 'test'
+  ...
+# Subtest: completing a task moves it from the pending counter to the completed counter
+not ok 4 - completing a task moves it from the pending counter to the completed counter
+  ---
+  duration_ms: 2.441524
+  type: 'test'
+  location: '/root/app/test/tasks.test.js:26:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      {
+    +   completed: 0,
+    +   pending: 2,
+    -   completed: 1,
+    -   pending: 1,
+        total: 2
+      }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    pending: 1
+    completed: 1
+    total: 2
+  actual:
+    pending: 2
+    completed: 0
+    total: 2
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///root/app/test/tasks.test.js:31:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: filterByPriority returns only matching tasks
+ok 5 - filterByPriority returns only matching tasks
+  ---
+  duration_ms: 0.179066
+  type: 'test'
+  ...
+# Subtest: removeTask keeps the counters consistent
+ok 6 - removeTask keeps the counters consistent
+  ---
+  duration_ms: 0.214253
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 5
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 95.191808
