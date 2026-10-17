@@ -357,7 +357,7 @@ function ExecRow({ e, open, toggle }: { e: ExecRecord; open: boolean; toggle: ()
       <button onClick={toggle} className="flex w-full items-center gap-2 px-2 py-1 text-left text-[12px]">
         <span className={`mono w-14 shrink-0 ${ok ? "text-ok" : "text-bad"}`}>{e.timedOut ? "timeout" : e.exitCode === null ? "error" : `exit ${e.exitCode}`}</span>
         <span className="w-16 shrink-0 text-muted">{e.label}</span>
-        <span className="mono truncate text-faint">{e.command}</span>
+        <span className={`mono truncate ${e.error ? "text-bad" : "text-faint"}`} title={e.error ?? e.command}>{e.error ?? e.command}</span>
         <span className="mono ml-auto shrink-0 text-[11px] text-faint">{(e.durationMs / 1000).toFixed(2)}s</span>
       </button>
       {open && (

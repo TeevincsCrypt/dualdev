@@ -58,7 +58,7 @@ class CreateOSSession implements SandboxSession {
   }
 
   async exec(label: string, script: string, timeoutSec: number, inWorkdir = true): Promise<ExecRecord> {
-    const body = inWorkdir ? `cd ${WORKDIR} && ${script}` : script;
+    const body = `export CI=1 NODE_ENV=test; ${inWorkdir ? `cd ${WORKDIR} && ${script}` : script}`;
     // `timeout` bounds the guest process (when the image has it); the request
     // timeout bounds the HTTP call either way.
     const quoted = shellQuote(body);
@@ -67,7 +67,6 @@ class CreateOSSession implements SandboxSession {
     try {
       const { result, exec_ms } = await this.sb.runCommand("sh", ["-c", command], {
         timeoutMs: (timeoutSec + 20) * 1000,
-        env: { CI: "1", NODE_ENV: "test" },
       });
       return {
         label,
