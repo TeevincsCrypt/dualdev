@@ -63,13 +63,13 @@ export function truncate(text: string, max: number = LIMITS.logBytes): string {
   return `${text.slice(0, head)}\n… [${text.length - max} characters truncated] …\n${text.slice(-tail)}`;
 }
 
-const SECRET_PATTERNS = [/sk-ant-[A-Za-z0-9_-]{10,}/g, /sk_(live|test)_[A-Za-z0-9]{10,}/g, /Bearer\s+[A-Za-z0-9._-]{16,}/g];
+const SECRET_PATTERNS = [/gsk_[A-Za-z0-9]{10,}/g, /sk-ant-[A-Za-z0-9_-]{10,}/g, /sk_(live|test)_[A-Za-z0-9]{10,}/g, /Bearer\s+[A-Za-z0-9._-]{16,}/g];
 
 /** Defence in depth: scrub anything shaped like a credential from logs. */
 export function redact(text: string): string {
   let out = text;
   for (const re of SECRET_PATTERNS) out = out.replace(re, "[redacted]");
-  for (const key of ["CREATEOS_SANDBOX_API_KEY", "ANTHROPIC_API_KEY"]) {
+  for (const key of ["CREATEOS_SANDBOX_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY"]) {
     const v = process.env[key];
     if (v && v.length >= 8) out = out.split(v).join("[redacted]");
   }

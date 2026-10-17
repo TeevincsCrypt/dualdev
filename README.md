@@ -46,7 +46,8 @@ src/
     agent/builder.ts       generation + validation of model output
     agent/bug-hunter.ts    context selection, repair validation (no test tampering), patch apply
     agent/verifier.ts      approved check commands: sync → node --version → node --check → node --test → startup smoke
-    ai/provider.ts         Anthropic Messages API (structured JSON output, streaming)
+    ai/groq.ts             Groq (OpenAI-compatible chat completions, strict json_schema output)
+    ai/provider.ts         model interface + Anthropic Messages API alternative
     ai/prompts.ts          build + repair prompts
     sandbox/createos.ts    CreateOS SDK adapter (@nodeops-createos/sandbox)
     tests/runner.ts        TAP parser + failure classifier
@@ -74,7 +75,10 @@ and the HTTP call has its own timeout.
 |---|---|
 | `CREATEOS_SANDBOX_API_KEY` | CreateOS Sandbox API key (required for any execution) |
 | `CREATEOS_SANDBOX_BASE_URL` | optional, defaults to `https://api.sb.createos.sh` |
-| `ANTHROPIC_API_KEY` | Claude API key (required for Build and Fix) |
+| `GROQ_API_KEY` | Groq API key: the default model provider for Build and Fix |
+| `GROQ_MODEL` | optional, default `openai/gpt-oss-120b` (needs strict JSON-schema support; other models fall back to JSON mode) |
+| `DUALDEV_MODEL_PROVIDER` | optional, `groq` or `anthropic`. Without it, Groq is used if `GROQ_API_KEY` is set |
+| `ANTHROPIC_API_KEY` | alternative provider: Claude API key |
 | `ANTHROPIC_MODEL` | optional, default `claude-opus-5-5` |
 | `ANTHROPIC_EFFORT` | optional, `low`/`medium`/`high`, default `medium` |
 | `DUALDEV_DISABLE_FALLBACKS` | set `1` to turn off server-side refusal fallbacks (on by default) |
@@ -91,7 +95,7 @@ shell never receives the key.
 
 ```bash
 npm install
-cp .env.example .env.local      # add CREATEOS_SANDBOX_API_KEY and ANTHROPIC_API_KEY
+cp .env.example .env.local      # add CREATEOS_SANDBOX_API_KEY and GROQ_API_KEY
 npm run sandbox:check           # CreateOS proof: new sandbox → python3 program → output → destroy
 npm run build && npm start      # http://127.0.0.1:3000  (or: npm run dev)
 npm test                        # vitest suite
@@ -193,7 +197,7 @@ the model's investigation and patch, and the verification re-run.
 | Unit tests (path validation, model-output validation, TAP parsing, classification, repair limits, test-tamper rejection, concurrency lock, reset) | **Pass** (`npm test`) |
 | Pipeline end-to-end with **test doubles** (a local temp-dir executor running only this repo's fixture, plus a scripted model patch) | **Pass.** Exercises the real verifier commands, TAP parsing and repair loop |
 | CreateOS sandbox execution | **Not yet verified.** The build environment has no `CREATEOS_SANDBOX_API_KEY`, and its egress proxy refuses `CONNECT api.sb.createos.sh:443` (policy denial, confirmed in the proxy log). The proxy-aware client was confirmed to reach allowed hosts. Run `npm run sandbox:check` or the dashboard proof to verify |
-| Live model generation / repair | **Not yet verified.** No `ANTHROPIC_API_KEY` in the build environment |
+| Live model generation / repair | **Not yet verified.** No `GROQ_API_KEY`, and `api.groq.com` is also blocked by the build environment's network policy. The Groq client is unit-tested against a mocked transport only |
 | Preview via CreateOS ingress | Implemented per SDK docs, **not verified** |
 
 The test doubles live only in `tests/`. The product never executes generated
