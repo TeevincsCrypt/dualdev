@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ProjectStatus } from "@/lib/types";
+import { SandboxProof } from "./SandboxProof";
 import { IntegrationStatus, MissingConfigNotice, useIntegrationStatus } from "./IntegrationStatus";
 import { api, Button, Logo, StatusBadge, timeAgo } from "./ui";
 
@@ -72,7 +73,10 @@ export function Dashboard() {
         </div>
       </section>
 
-      <div className="mb-6"><MissingConfigNotice status={status} /></div>
+      <div className="mb-6 space-y-4">
+        <MissingConfigNotice status={status} />
+        <SandboxProof />
+      </div>
 
       <section className="rounded-xl border border-line bg-panel p-4">
         <label htmlFor="spec" className="text-[12px] font-medium text-muted">New project</label>

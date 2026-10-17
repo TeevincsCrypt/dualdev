@@ -68,6 +68,10 @@ export class Agent {
     return this.deps.store.list();
   }
 
+  get store() {
+    return this.deps.store;
+  }
+
   status() {
     return { sandbox: { name: this.deps.sandbox.name, ...this.deps.sandbox.configured() }, model: { name: this.deps.model.name, ...this.deps.model.configured() } };
   }

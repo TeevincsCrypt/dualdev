@@ -52,6 +52,23 @@ export class ProjectStore {
     return projects.filter((p): p is Project => p !== null).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
+  /** Small JSON documents outside the project namespace (e.g. the last sandbox proof). */
+  async getMeta<T>(name: "proof"): Promise<T | null> {
+    try {
+      return JSON.parse(await readFile(path.join(this.root, `${name}.json`), "utf8")) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  async saveMeta(name: "proof", value: unknown): Promise<void> {
+    await mkdir(this.root, { recursive: true });
+    const target = path.join(this.root, `${name}.json`);
+    const tmp = `${target}.${randomBytes(4).toString("hex")}.tmp`;
+    await writeFile(tmp, JSON.stringify(value));
+    await rename(tmp, target);
+  }
+
   async delete(id: string): Promise<void> {
     await rm(this.file(id), { force: true });
   }

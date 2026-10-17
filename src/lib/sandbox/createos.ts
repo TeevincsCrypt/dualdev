@@ -1,11 +1,12 @@
 import {
-  CreateosSandboxClient,
+  type CreateosSandboxClient,
   CreateosSandboxError,
   CreateosSandboxNotFoundError,
   Sandbox,
 } from "@nodeops-createos/sandbox";
 import path from "node:path";
 import type { ExecRecord } from "../types";
+import { createosClient, createosClientOptions } from "./client";
 import { redact, truncate, validateRelativePath } from "../security/validation";
 import { SandboxUnavailableError, type SandboxProvider, type SandboxSession } from "./types";
 
@@ -126,7 +127,7 @@ export class CreateOSProvider implements SandboxProvider {
   private client(): CreateosSandboxClient {
     const c = this.configured();
     if (!c.ok) throw new SandboxUnavailableError(c.reason);
-    this.#client ??= new CreateosSandboxClient({ timeoutMs: 60_000 });
+    this.#client ??= createosClient();
     return this.#client;
   }
 
@@ -134,7 +135,7 @@ export class CreateOSProvider implements SandboxProvider {
     const client = this.client();
     if (existingId) {
       try {
-        const sb = await Sandbox.connect(existingId, { apiKey: process.env.CREATEOS_SANDBOX_API_KEY, baseUrl: client.baseUrl });
+        const sb = await Sandbox.connect(existingId, { ...createosClientOptions(), baseUrl: client.baseUrl });
         if (sb.status === "paused" || sb.status === "pausing") {
           if (sb.status === "pausing") await sb.waitUntilPaused({ timeoutMs: 60_000 });
           await sb.resume();
@@ -162,7 +163,7 @@ export class CreateOSProvider implements SandboxProvider {
 
   async destroy(id: string): Promise<void> {
     try {
-      const sb = await Sandbox.connect(id, { apiKey: process.env.CREATEOS_SANDBOX_API_KEY, baseUrl: this.client().baseUrl });
+      const sb = await Sandbox.connect(id, { ...createosClientOptions(), baseUrl: this.client().baseUrl });
       await sb.destroy();
     } catch (err) {
       if (!(err instanceof CreateosSandboxNotFoundError)) throw err;

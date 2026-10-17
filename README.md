@@ -92,7 +92,7 @@ shell never receives the key.
 ```bash
 npm install
 cp .env.example .env.local      # add CREATEOS_SANDBOX_API_KEY and ANTHROPIC_API_KEY
-npm run sandbox:check           # proves CreateOS works: create → exec → upload → destroy
+npm run sandbox:check           # CreateOS proof: new sandbox → python3 program → output → destroy
 npm run build && npm start      # http://127.0.0.1:3000  (or: npm run dev)
 npm test                        # vitest suite
 ```
@@ -103,8 +103,23 @@ npm test                        # vitest suite
    [Sandbox quickstart](https://createos.sh/docs/Sandbox/Quickstart/).
 2. Put it in `.env.local` as `CREATEOS_SANDBOX_API_KEY`.
 3. Make sure the host running DUALDEV can reach `api.sb.createos.sh:443`.
-4. Run `npm run sandbox:check`. It prints the node version from inside a real
-   sandbox and then destroys the sandbox.
+4. Run `npm run sandbox:check`, or click **Run proof** on the dashboard. It
+   creates a fresh sandbox, uploads and runs a Python program with `python3`,
+   records stdout, stderr, the exit code and timing, and puts the
+   control-plane metadata (account, sandbox id, shape, rootfs, region, IP) and
+   the guest's hostname and kernel next to this server's hostname. It then
+   destroys the sandbox. The program's output is deterministic
+   (`primes below 10000: 1229 sum: 5736396`), so you can check it by hand.
+   The last result is saved in `.data/proof.json` and shown in the UI.
+5. **Behind an egress proxy** (e.g. a cloud dev container): DUALDEV routes SDK
+   traffic through `HTTPS_PROXY` automatically (the SDK's own connection pool
+   ignores it). If the proxy re-signs TLS, set `NODE_EXTRA_CA_CERTS` to its CA
+   bundle.
+
+The official `@nodeops-createos/cli` handles CreateOS *deployments*
+(`init`/`deploy`/`logs`) and has no sandbox commands. Sandboxes are driven
+through the official SDK, `@nodeops-createos/sandbox`, which is what DUALDEV
+uses.
 
 ### Stripe Projects setup
 
@@ -177,7 +192,7 @@ the model's investigation and patch, and the verification re-run.
 |---|---|
 | Unit tests (path validation, model-output validation, TAP parsing, classification, repair limits, test-tamper rejection, concurrency lock, reset) | **Pass** (`npm test`) |
 | Pipeline end-to-end with **test doubles** (a local temp-dir executor running only this repo's fixture, plus a scripted model patch) | **Pass.** Exercises the real verifier commands, TAP parsing and repair loop |
-| CreateOS sandbox execution | **Not yet verified.** The build environment had no API key and its network policy blocked `api.sb.createos.sh`. Run `npm run sandbox:check` to verify |
+| CreateOS sandbox execution | **Not yet verified.** The build environment has no `CREATEOS_SANDBOX_API_KEY`, and its egress proxy refuses `CONNECT api.sb.createos.sh:443` (policy denial, confirmed in the proxy log). The proxy-aware client was confirmed to reach allowed hosts. Run `npm run sandbox:check` or the dashboard proof to verify |
 | Live model generation / repair | **Not yet verified.** No `ANTHROPIC_API_KEY` in the build environment |
 | Preview via CreateOS ingress | Implemented per SDK docs, **not verified** |
 
