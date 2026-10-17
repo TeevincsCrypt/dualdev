@@ -114,3 +114,26 @@ describe("model output validation", () => {
     expect(validateRepair(repair("y", "src/a.js"), files).changes).toHaveLength(1);
   });
 });
+
+describe("sandbox failures", () => {
+  it("records a failed file sync as a failed run instead of crashing", async () => {
+    const dir = await tempDir();
+    const sandbox = new LocalTestSandbox(path.join(dir, "sb"));
+    const original = sandbox.acquire.bind(sandbox);
+    sandbox.acquire = async (id?: string) => {
+      const s = await original(id);
+      s.sync = async () => ({ label: "sync", command: "upload", exitCode: null, stdout: "", stderr: "", durationMs: 1, timedOut: false, error: "Upload failed: CreateosSandboxValidationError: bad path" });
+      return s;
+    };
+    const agent = new Agent({ store: new ProjectStore(path.join(dir, "data")), sandbox, model: new ScriptedModel([]), fixtureDir });
+    const p = await agent.createDemo();
+    await agent.test(p.id);
+    await agent.wait(p.id);
+    const done = await agent.get(p.id);
+    expect(done.lastError).toBeUndefined();
+    expect(done.status).toBe("failing");
+    expect(done.runs[0].passed).toBe(false);
+    expect(done.runs[0].failures[0].message).toMatch(/Upload failed/);
+    expect(done.events.some((e) => /File sync to sandbox failed: Upload failed/.test(e.message))).toBe(true);
+  });
+});

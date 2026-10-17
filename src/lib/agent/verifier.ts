@@ -27,6 +27,7 @@ export async function runChecks(
 ): Promise<Run> {
   const startedAt = new Date().toISOString();
   const execs: ExecRecord[] = [];
+  let nodeVersion: string | undefined; // set before any early return reads it
 
   await onStage("executing", `Uploading ${Object.keys(files).length} files to sandbox ${session.id}.`);
   const sync = await session.sync(files);
@@ -35,6 +36,7 @@ export async function runChecks(
 
   const version = await session.exec("env", "node --version", 15);
   execs.push(version);
+  if (version.exitCode === 0) nodeVersion = version.stdout.trim();
   const compile = await session.exec("compile", COMPILE_SCRIPT, 60);
   execs.push(compile);
   await onStage("executing", compile.exitCode === 0 ? "Syntax check passed for all .js files." : "Syntax check failed.");
@@ -64,7 +66,7 @@ export async function runChecks(
       startedAt,
       finishedAt: new Date().toISOString(),
       sandboxId: session.id,
-      nodeVersion: version.exitCode === 0 ? version.stdout.trim() : undefined,
+      nodeVersion,
       execs,
       tests,
       compiles,
