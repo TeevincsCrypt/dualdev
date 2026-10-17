@@ -211,3 +211,28 @@ describe("repair context", () => {
     expect(picked).toEqual(expect.arrayContaining(["server.js", "src/a.js", "package.json"]));
   });
 });
+
+describe("switching CreateOS accounts", () => {
+  it("does not reuse a shared sandbox created with a different API key", async () => {
+    const dir = await tempDir();
+    const sandbox = new LocalTestSandbox(path.join(dir, "sb"), 1);
+    const agent = new Agent({ store: new ProjectStore(path.join(dir, "data")), sandbox, model: new ScriptedModel([]), fixtureDir });
+    const prev = process.env.CREATEOS_SANDBOX_API_KEY;
+    try {
+      process.env.CREATEOS_SANDBOX_API_KEY = "key-account-a";
+      const p = await agent.createDemo();
+      await agent.test(p.id);
+      await agent.wait(p.id);
+      expect(sandbox.created).toBe(1);
+      await agent.test(p.id);
+      await agent.wait(p.id);
+      expect(sandbox.created).toBe(1); // same account: resumed, not created
+      process.env.CREATEOS_SANDBOX_API_KEY = "key-account-b";
+      await agent.test(p.id);
+      await agent.wait(p.id);
+      expect(sandbox.created).toBe(2); // new account: fresh sandbox
+    } finally {
+      process.env.CREATEOS_SANDBOX_API_KEY = prev;
+    }
+  }, 60_000);
+});

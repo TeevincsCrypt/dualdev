@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { ModelUnavailableError, type ModelProvider } from "../ai/provider";
@@ -27,6 +28,11 @@ export interface AgentDeps {
 
 // One sandbox per job: created on first use, shared by every check and repair
 // attempt in the job, destroyed when the job ends (unless a preview needs it).
+/** Short non-reversible tag of the CreateOS key, so switching accounts never reuses another account's sandbox. */
+function accountTag(): string {
+  return createHash("sha256").update(process.env.CREATEOS_SANDBOX_API_KEY ?? "").digest("hex").slice(0, 12);
+}
+
 const HEARTBEAT_MS = 15_000;
 const HEARTBEAT_STALE_MS = 2 * 60_000;
 
@@ -77,6 +83,12 @@ export class Agent {
 
   get store() {
     return this.deps.store;
+  }
+
+  /** The shared sandbox id, only if it was created with the currently configured API key. */
+  async sharedSandboxId(): Promise<string | undefined> {
+    const meta = await this.deps.store.getMeta<{ id: string; account?: string }>("sandbox");
+    return meta && meta.account === accountTag() ? meta.id : undefined;
   }
 
   status() {
@@ -267,7 +279,7 @@ export class Agent {
   async remove(id: string) {
     const p = await this.get(id);
     if (p.busy) throw new ConflictError("A job is running for this project.");
-    const shared = (await this.deps.store.getMeta<{ id: string }>("sandbox"))?.id;
+    const shared = (await this.sharedSandboxId());
     if (p.sandboxId && p.sandboxId !== shared && this.deps.sandbox.configured().ok) {
       await this.deps.sandbox.destroy(p.sandboxId).catch(() => undefined);
     }
@@ -352,7 +364,7 @@ export class Agent {
   private async session(p: Project, job: Job): Promise<SandboxSession> {
     if (job.session) return job.session;
     // One shared sandbox for all projects, resumed here and paused on release.
-    const shared = (await this.deps.store.getMeta<{ id: string }>("sandbox"))?.id;
+    const shared = (await this.sharedSandboxId());
     let session: SandboxSession;
     try {
       session = await this.deps.sandbox.acquire(shared);
@@ -377,7 +389,7 @@ export class Agent {
       this.event(p, "preparing_sandbox", "info", `Resumed shared ${this.deps.sandbox.name} ${session.id}.`);
     } else {
       this.event(p, "preparing_sandbox", "info", `Created shared ${this.deps.sandbox.name} ${session.id}.`);
-      await this.deps.store.saveMeta("sandbox", { id: session.id });
+      await this.deps.store.saveMeta("sandbox", { id: session.id, account: accountTag() });
     }
     p.sandboxId = session.id;
     await this.save(p);
@@ -409,7 +421,7 @@ export class Agent {
   private async reclaimStaleSandboxes(exceptId: string): Promise<number> {
     let freed = 0;
     for (const other of await this.deps.store.list()) {
-      const shared = (await this.deps.store.getMeta<{ id: string }>("sandbox"))?.id;
+      const shared = (await this.sharedSandboxId());
       if (other.id === exceptId || !other.sandboxId || other.sandboxId === shared || other.preview || this.jobs.has(other.id)) continue;
       const fresh = await this.deps.store.get(other.id);
       if (!fresh?.sandboxId || fresh.busy) continue;
