@@ -69,7 +69,7 @@ const SECRET_PATTERNS = [/gsk_[A-Za-z0-9]{10,}/g, /sk-ant-[A-Za-z0-9_-]{10,}/g, 
 export function redact(text: string): string {
   let out = text;
   for (const re of SECRET_PATTERNS) out = out.replace(re, "[redacted]");
-  for (const key of ["CREATEOS_SANDBOX_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY"]) {
+  for (const key of ["CREATEOS_SANDBOX_API_KEY", "ANTHROPIC_API_KEY", "GROQ_API_KEY", "LLM_API_KEY"]) {
     const v = process.env[key];
     if (v && v.length >= 8) out = out.split(v).join("[redacted]");
   }

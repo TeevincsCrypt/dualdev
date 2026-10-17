@@ -44,6 +44,22 @@ describe("GroqProvider (HTTP client, mocked transport)", () => {
     expect(calls[1].body.response_format).toEqual({ type: "json_object" });
   });
 
+  it("salvages Groq's failed_generation when it is valid JSON", async () => {
+    process.env.GROQ_API_KEY = "gsk_test";
+    const calls: Call[] = [];
+    const bad = { status: 400, body: { error: { message: "Failed to generate JSON. Please adjust your prompt.", code: "json_validate_failed", failed_generation: '{"name":"x"}' } } };
+    expect(await new GroqProvider(fakeFetch([bad], calls)).generateJson(args)).toBe('{"name":"x"}');
+    expect(calls).toHaveLength(1);
+  });
+
+  it("retries in json_object mode when the failed generation is not JSON", async () => {
+    process.env.GROQ_API_KEY = "gsk_test";
+    const calls: Call[] = [];
+    const bad = { status: 400, body: { error: { message: "Failed to generate JSON.", code: "json_validate_failed", failed_generation: "{ truncated" } } };
+    expect(await new GroqProvider(fakeFetch([bad, ok('```json\n{"a":2}\n```')], calls)).generateJson(args)).toBe('{"a":2}');
+    expect(calls[1].body.response_format).toEqual({ type: "json_object" });
+  });
+
   it("surfaces truncation and auth errors", async () => {
     process.env.GROQ_API_KEY = "gsk_test";
     const trunc = { status: 200, body: { choices: [{ message: { content: "{" }, finish_reason: "length" }] } };
