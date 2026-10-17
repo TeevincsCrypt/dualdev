@@ -1,7 +1,10 @@
+import { after } from "next/server";
 import { agent } from "@/lib/server";
 import { fail, handle, ok, projectId } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
+// Jobs keep running after the 202 response (via after()); allow them time to finish on serverless hosts.
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string; action: string }> };
 
@@ -11,6 +14,8 @@ export async function POST(req: Request, { params }: Ctx) {
     const { id: raw, action } = await params;
     const id = projectId(raw);
     const a = agent();
+    // On serverless hosts the function would freeze after responding; keep it alive until the job ends.
+    after(() => a.wait(id));
     switch (action) {
       case "build": {
         const body = (await req.json().catch(() => ({}))) as { autoFix?: unknown };

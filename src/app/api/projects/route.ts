@@ -1,7 +1,9 @@
+import { after } from "next/server";
 import { agent } from "@/lib/server";
 import { handle, ok } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export async function GET() {
   return handle(async () => {
@@ -38,6 +40,7 @@ export async function POST(req: Request) {
     if (typeof body.spec !== "string") throw new Error("spec is required");
     const p = await a.createFromSpec(body.spec);
     await a.build(p.id, { autoFix: body.autoFix !== false });
+    after(() => a.wait(p.id));
     return ok({ id: p.id }, 201);
   });
 }
