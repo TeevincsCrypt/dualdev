@@ -18,3 +18,14 @@ describe("bug hunter url scan", () => {
     expect(staticChecks(html, new URL("https://site.test"), 200)).toEqual([]);
   });
 });
+
+import { sandboxName, SANDBOX_NAME_PREFIX } from "@/lib/sandbox/types";
+describe("sandbox names", () => {
+  it("fit CreateOS's 22-character limit and keep the dualdev prefix", () => {
+    for (const k of ["job", "proof"]) {
+      const n = sandboxName(k);
+      expect(n.length).toBeLessThanOrEqual(22);
+      expect(n.startsWith(SANDBOX_NAME_PREFIX)).toBe(true);
+    }
+  });
+});
