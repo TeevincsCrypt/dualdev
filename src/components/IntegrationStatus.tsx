@@ -2,7 +2,11 @@
 import { useEffect, useState } from "react";
 import { api } from "./ui";
 
-type Status = { sandbox: { name: string; ok: boolean; reason?: string }; model: { name: string; ok: boolean; reason?: string } };
+type Status = {
+  sandbox: { name: string; ok: boolean; reason?: string };
+  model: { name: string; ok: boolean; reason?: string };
+  storage?: { kind: string; durable: boolean };
+};
 
 export function useIntegrationStatus() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -32,13 +36,15 @@ export function IntegrationStatus({ status }: { status: Status | null }) {
 }
 
 export function MissingConfigNotice({ status }: { status: Status | null }) {
-  if (!status || (status.sandbox.ok && status.model.ok)) return null;
+  const volatile = status?.storage && !status.storage.durable;
+  if (!status || (status.sandbox.ok && status.model.ok && !volatile)) return null;
   return (
     <div className="rounded-lg border border-warn/30 bg-warn/5 px-4 py-3 text-[13px] text-warn">
       <p className="font-medium">Setup incomplete — runs will fail with a clear error until this is fixed.</p>
       <ul className="mt-1 list-disc pl-5 text-warn/80">
         {!status.sandbox.ok && <li>CreateOS: {status.sandbox.reason}</li>}
         {!status.model.ok && <li>AI model: {status.model.reason}</li>}
+        {volatile && <li>Storage: projects are not shared between serverless instances (you may see &quot;Project not found&quot;). Add Upstash Redis in Vercel → Storage and redeploy.</li>}
       </ul>
     </div>
   );

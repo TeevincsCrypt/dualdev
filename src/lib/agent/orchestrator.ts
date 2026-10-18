@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { ModelUnavailableError, type ModelProvider } from "../ai/provider";
-import { ProjectStore } from "../projects/store";
+import { ProjectStore, type Store } from "../projects/store";
 import { SandboxQuotaError, SandboxUnavailableError, type SandboxProvider, type SandboxSession } from "../sandbox/types";
 import { LIMITS, validateFileSet } from "../security/validation";
 import type { ActivityEvent, Project, RepairAttempt, RepairSession, Run, Stage } from "../types";
@@ -19,7 +19,7 @@ export const DEMO_SPEC =
   "filter by priority, and show a dashboard with pending and completed counters.";
 
 export interface AgentDeps {
-  store: ProjectStore;
+  store: Store;
   sandbox: SandboxProvider;
   model: ModelProvider;
   fixtureDir: string;
@@ -92,7 +92,11 @@ export class Agent {
   }
 
   status() {
-    return { sandbox: { name: this.deps.sandbox.name, ...this.deps.sandbox.configured() }, model: { name: this.deps.model.name, ...this.deps.model.configured() } };
+    return {
+      sandbox: { name: this.deps.sandbox.name, ...this.deps.sandbox.configured() },
+      model: { name: this.deps.model.name, ...this.deps.model.configured() },
+      storage: { kind: this.deps.store.kind, durable: this.deps.store.durable },
+    };
   }
 
   // ---------- project creation ----------
