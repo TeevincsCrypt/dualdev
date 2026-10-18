@@ -21,6 +21,7 @@ export function agent(): Agent {
     sandbox: new CreateOSProvider(),
     model: createModelProvider(),
     fixtureDir: path.join(process.cwd(), "fixtures", "task-manager"),
+    storageHint: () => RedisStore.envHint(),
   });
   return g.__dualdevAgent;
 }
