@@ -40,6 +40,10 @@ const PROMPT = opt("prompt", "A modern landing page for a specialty coffee shop 
 const SCAN_URL = opt("scan", "https://example.com");
 const PAY = !flag("no-pay");
 const VOICE = !flag("no-voice");
+// For restricted networks: serve Tailwind's browser build locally, placeholder images,
+// and a clearly labelled card instead of the (unreachable) Stripe Checkout page.
+const OFFLINE_CDN = flag("offline-cdn");
+const STRIPE_BLOCKED = flag("stripe-blocked");
 const OUT = path.resolve(opt("out", "demo-output"));
 const W = 1280;
 const H = 720;
@@ -48,14 +52,15 @@ rmSync(WORK, { recursive: true, force: true });
 mkdirSync(WORK, { recursive: true });
 
 // ---------- script: narration per scene ----------
-const SCENES = [
+const SCENES_ALL = [
   { id: "intro", say: "This is DualDev. One AI, two superpowers: it builds apps from a prompt, and it hunts and fixes bugs, all verified in a real CreateOS sandbox." },
   { id: "features", say: "Generation and verification work together. Every check runs in an isolated sandbox, and every result comes with real evidence." },
   { id: "dashboard", say: "Let's open the workspace and describe what we want to build, in plain English." },
   { id: "prompt", say: "I'll ask for a landing page for a coffee shop, and hit Build." },
   { id: "building", say: "DualDev is now generating the code with the AI model. As soon as the files exist, the preview opens automatically." },
   { id: "preview", say: "Here is what it built. Let's view it full screen." },
-  { id: "evidence", say: "Behind the scenes, the generated files were uploaded to a CreateOS sandbox, syntax checked and tested. These are the real execution results." },
+  { id: "evidence", say: "Behind the scenes, the generated files were uploaded to a CreateOS sandbox, syntax checked and tested. These are the real execution results.",
+    alt: { when: /Sandbox checks skipped|sandbox unavailable/i, say: "Next, DualDev tries to run the files in a CreateOS sandbox. This time the account's sandbox limit was reached, so the checks were skipped, and DualDev says so instead of faking a pass." } },
   { id: "bughunt", say: "Now the Bug Hunter. Paste any website address, and DualDev fetches the page, runs automatic checks, and has the AI review its code." },
   { id: "findings", say: "Each finding has a severity, the evidence, and a suggested fix." },
   { id: "pricing", say: "Finally, monetization. DualDev Pro is sold through Stripe Checkout." },
@@ -63,6 +68,12 @@ const SCENES = [
   { id: "success", say: "After payment, DualDev verifies the session with Stripe on the server before confirming the upgrade." },
   { id: "outro", say: "DualDev. Build and fix, with proof. Built for the CreateOS and Stripe hackathon." },
 ];
+const SCENES = SCENES_ALL.map((s) =>
+  !STRIPE_BLOCKED ? s
+  : s.id === "stripe" ? { ...s, say: "Clicking upgrade makes the live server create a real Stripe Checkout session, in test mode." }
+  : s.id === "success" ? { ...s, say: "Once a customer pays, DualDev verifies the session with Stripe on the server before confirming the upgrade." }
+  : s,
+);
 
 // ---------- helpers ----------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -130,10 +141,15 @@ if (VOICE) {
     const wav = speak(s.say, s.id);
     narration[s.id] = wav ? { wav, secs: wavSeconds(wav) } : { wav: null, secs: s.say.split(" ").length / 2.6 };
     voiceOk ||= Boolean(wav);
+    if (s.alt) {
+      const altWav = speak(s.alt.say, `${s.id}-alt`);
+      narration[s.id].alt = altWav ? { wav: altWav, secs: wavSeconds(altWav) } : { wav: null, secs: s.alt.say.split(" ").length / 2.6 };
+      narration[s.id].secs = Math.max(narration[s.id].secs, narration[s.id].alt.secs);
+    }
   }
   if (!voiceOk) console.warn("No text-to-speech engine found; continuing without voiceover (captions still added).");
 } else {
-  for (const s of SCENES) narration[s.id] = { wav: null, secs: s.say.split(" ").length / 2.6 };
+  for (const s of SCENES) narration[s.id] = { wav: null, secs: Math.max(...[s.say, s.alt?.say].filter(Boolean).map((t) => t.split(" ").length / 2.6)), alt: s.alt ? { wav: null } : undefined };
 }
 
 // ---------- 2. record the real site ----------
@@ -150,6 +166,43 @@ const context = await browser.newContext({
   recordVideo: { dir: WORK, size: { width: W, height: H } },
   ...(proxy ? { ignoreHTTPSErrors: true } : {}),
 });
+if (OFFLINE_CDN) {
+  // Compile exactly what Tailwind's v3 Play CDN would produce for the project being previewed.
+  const { compilePlayCss, playScript } = await import("./tailwind-play.mjs");
+  const cache = new Map();
+  await context.route(/https:\/\/cdn\.tailwindcss\.com\/?.*/, async (r) => {
+    try {
+      const id = /\/projects\/(p_[a-f0-9]{12})/.exec(page.url())?.[1];
+      if (!id) return r.fulfill({ contentType: "text/javascript", body: "window.tailwind={};" });
+      if (!cache.has(id)) {
+        const res = await context.request.get(`${SITE}/api/projects/${id}`);
+        cache.set(id, playScript(await compilePlayCss((await res.json()).data.files)));
+      }
+      await r.fulfill({ contentType: "text/javascript", body: cache.get(id) });
+    } catch (e) {
+      log(`tailwind compile failed: ${e.message}`);
+      await r.fulfill({ contentType: "text/javascript", body: "window.tailwind={};" });
+    }
+  });
+  const ph = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d9cbb8"/><stop offset="1" stop-color="#9c7b5c"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>`;
+  await context.route(/https:\/\/images\.unsplash\.com\/.*/, (r) => r.fulfill({ contentType: "image/svg+xml", body: ph }));
+}
+if (STRIPE_BLOCKED) {
+  await context.route(/https:\/\/checkout\.stripe\.com\/.*/, (r) => {
+    const id = (/cs_(test|live)_[A-Za-z0-9]+/.exec(r.request().url()) || ["(session)"])[0];
+    r.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;height:100vh;display:grid;place-items:center;background:#f6f9fc;font-family:system-ui,sans-serif;color:#1a1f36">
+        <div style="width:640px;background:#fff;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.08);padding:40px">
+          <div style="display:inline-block;padding:4px 10px;border-radius:6px;background:#fff4e5;color:#b25e09;font-size:13px;font-weight:600">TEST MODE</div>
+          <h1 style="font-size:26px;margin:16px 0 6px">Stripe Checkout session created ✓</h1>
+          <p style="color:#5b6176;margin:0 0 18px">DualDev Pro · $19.00 / month</p>
+          <code style="display:block;background:#f6f9fc;border-radius:8px;padding:12px;font-size:13px;word-break:break-all">${r.request().url().slice(0, 140)}…</code>
+          <p style="color:#8792a2;font-size:13px;margin-top:18px">Recording note: this network blocks checkout.stripe.com, so Stripe's hosted payment page cannot be shown here. Session ${id.slice(0, 18)}… was created by the live server.</p>
+        </div></body></html>`,
+    });
+  });
+}
 // Visible cursor (videos do not capture the OS cursor).
 await context.addInitScript(() => {
   addEventListener("DOMContentLoaded", () => {
@@ -202,10 +255,11 @@ async function outcome(ok, fail, timeout) {
 /** Runs a scene and keeps it on screen at least as long as its narration. */
 async function scene(id, fn) {
   const start = now();
-  marks.push({ id, start, secs: narration[id].secs });
+  const mark = { id, start, secs: narration[id].secs, alt: false };
+  marks.push(mark);
   log("scene", id);
   try {
-    await fn();
+    await fn(mark);
   } catch (e) {
     log(`scene ${id} did not complete: ${e.message.split("\n")[0]}`);
   }
@@ -240,7 +294,28 @@ await scene("building", async () => {
   // Wait for the real generation: the instant preview iframe appears once files exist.
   await outcome(page.locator('iframe[title="Instant preview"]'), page.getByText("Failed", { exact: true }), 180_000);
 });
+/** Restricted networks: style the srcdoc preview the way Tailwind's Play CDN would. */
+async function stylePreview() {
+  if (!OFFLINE_CDN) return;
+  const id = /\/projects\/(p_[a-f0-9]{12})/.exec(page.url())?.[1];
+  const frame = await (await page.locator('iframe[title="Instant preview"]').elementHandle())?.contentFrame();
+  if (!id || !frame) return;
+  const { compilePlayCss } = await import("./tailwind-play.mjs");
+  const res = await context.request.get(`${SITE}/api/projects/${id}`);
+  const css = await compilePlayCss((await res.json()).data.files);
+  await frame.evaluate((css) => {
+    const s = document.createElement("style");
+    s.textContent = css;
+    document.head.appendChild(s);
+    const ph = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d9cbb8"/><stop offset="1" stop-color="#9c7b5c"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/></svg>');
+    for (const img of document.querySelectorAll("img")) if (/images\.unsplash\.com/.test(img.src)) img.src = ph;
+    for (const el of document.querySelectorAll("[style*='images.unsplash.com']")) el.style.backgroundImage = `url("${ph}")`;
+  }, css);
+  log("  preview styled with compiled Tailwind v3 CSS (CDN unreachable here)");
+}
+
 await scene("preview", async () => {
+  await stylePreview().catch((e) => log(`  could not style preview: ${e.message}`));
   const frame = page.locator('iframe[title="Instant preview"]');
   if (!(await frame.count())) throw new Error("no preview (the build did not produce files)");
   await click(page.getByRole("button", { name: /Full screen/ }));
@@ -252,11 +327,15 @@ await scene("preview", async () => {
   }
   await smoothScroll(-2000, 10);
   await sleep(500);
-  await page.keyboard.press("Escape");
+  await page.evaluate(() => document.fullscreenElement && document.exitFullscreen());
+  await sleep(400);
 });
-await scene("evidence", async () => {
+await scene("evidence", async (mark) => {
   // Show the real sandbox results once the checks finish (or whatever state the job is in).
   await page.waitForFunction(() => !document.body.innerText.includes("Cancel"), null, { timeout: 150_000 }).catch(() => {});
+  const alt = SCENES.find((s) => s.id === "evidence").alt;
+  mark.alt = alt.when.test(await page.locator("body").innerText());
+  if (mark.alt) log("  sandbox checks were skipped: using the honest narration");
   await click(page.getByRole("button", { name: "Code", exact: true }));
   await sleep(1500);
   const results = page.getByText("Sandbox executions").first();
@@ -293,6 +372,7 @@ await scene("stripe", async () => {
   if (r !== "ok") throw new Error(`Stripe Checkout did not open (${r})`);
   onStripe = true;
   await page.waitForLoadState("networkidle");
+  if (STRIPE_BLOCKED) return;
   const testMode = /test mode|sandbox/i.test(await page.locator("body").innerText());
   if (!PAY || !testMode) {
     log(testMode ? "--no-pay: not submitting" : "Stripe is NOT in test mode: refusing to pay in the demo");
@@ -312,7 +392,7 @@ await scene("stripe", async () => {
   await click(pay);
 });
 await scene("success", async () => {
-  if (!onStripe) return;
+  if (!onStripe || STRIPE_BLOCKED) return;
   if (PAY) await page.waitForURL(/\/billing\/success/, { timeout: 60_000 });
   await page.getByText(/Welcome to DualDev Pro|Checkout not completed|Could not verify/).first().waitFor({ timeout: 20_000 });
 });
@@ -340,11 +420,13 @@ const ts = (s) => {
 let srt = "";
 let n = 0;
 for (const m of marks) {
-  const sentences = SCENES.find((s) => s.id === m.id).say.match(/[^.!?]+[.!?]+/g) ?? [];
+  const sc = SCENES.find((s) => s.id === m.id);
+  const sentences = (m.alt ? sc.alt.say : sc.say).match(/[^.!?]+[.!?]+/g) ?? [];
   const totalChars = sentences.reduce((a, s) => a + s.length, 0);
   let t = m.start + 0.3;
   for (const s of sentences) {
-    const d = (m.secs * s.length) / totalChars;
+    const secs = m.alt ? narration[m.id].alt?.secs ?? m.secs : narration[m.id].wav ? wavSeconds(narration[m.id].wav) : m.secs;
+    const d = (secs * s.length) / totalChars;
     srt += `${++n}\n${ts(t)} --> ${ts(t + d)}\n${s.trim()}\n\n`;
     t += d;
   }
@@ -365,7 +447,7 @@ const filters = ["[0:a]volume=0.55[m]"];
 const mixes = ["[m]"];
 let idx = 1;
 for (const m of marks) {
-  const wav = narration[m.id].wav;
+  const wav = m.alt ? narration[m.id].alt?.wav : narration[m.id].wav;
   if (!wav) continue;
   inputs.push("-i", path.basename(wav));
   const ms = Math.round((m.start + 0.3) * 1000);
