@@ -228,3 +228,15 @@ code on the host.
 - Logs are truncated and scrubbed of anything shaped like a key. No secrets
   are sent to the sandbox or included in prompts.
 - Preview ingress is opt-in per project and can be turned off.
+
+## Recording a demo video
+
+`scripts/demo/record.mjs` drives the **real deployed site** in Chromium (prompt → build → preview → evidence → Bug Hunter → Stripe Checkout with the test card → verified success page) and renders `demo-output/dualdev-demo.mp4` with burned-in captions, a voiceover from the OS's built-in text-to-speech (Windows SAPI, macOS `say`, or `espeak-ng`), synthesized background music and click sounds. Whatever the live site does, failures included, is what gets recorded.
+
+```bash
+npx playwright install chromium   # once
+npm run demo:record -- --url https://your-app.vercel.app
+# options: --prompt "…"  --scan https://site.com  --no-pay  --no-voice  --out dir
+```
+
+The card is only submitted when Stripe Checkout shows test mode.

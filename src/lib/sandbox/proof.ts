@@ -71,7 +71,7 @@ export async function runCreateOSProof(sharedId?: string): Promise<ProofResult> 
     return { ...base, finishedAt: new Date().toISOString(), error: `Could not authenticate with CreateOS: ${redact(describe(e))}` };
   }
 
-  let sandbox: Sandbox;
+  let sandbox: Sandbox | undefined;
   let reused = false;
   try {
     // Reuse DUALDEV's shared sandbox when there is one: creations are capped per day.
@@ -90,12 +90,16 @@ export async function runCreateOSProof(sharedId?: string): Promise<ProofResult> 
         /* fall through to create */
       }
     }
-    sandbox ??= await client.createSandbox({
-      shape: process.env.CREATEOS_SANDBOX_SHAPE || "s-1vcpu-1gb",
-      rootfs: process.env.CREATEOS_SANDBOX_ROOTFS || "devbox:1",
-      egress: ["registry.npmjs.org:443"],
-      name: sandboxName("proof"),
-    });
+    const request = { shape: process.env.CREATEOS_SANDBOX_SHAPE || "s-1vcpu-1gb", rootfs: process.env.CREATEOS_SANDBOX_ROOTFS || "devbox:1", egress: ["registry.npmjs.org:443"] };
+    if (!sandbox) {
+      try {
+        sandbox = await client.createSandbox({ ...request, name: sandboxName("proof") });
+      } catch (e) {
+        // If the control plane rejects the name, create without one.
+        if ((e as { statusCode?: number }).statusCode !== 400) throw e;
+        sandbox = await client.createSandbox(request);
+      }
+    }
   } catch (e) {
     return { ...base, finishedAt: new Date().toISOString(), error: `Sandbox creation failed: ${redact(describe(e))}` };
   }
