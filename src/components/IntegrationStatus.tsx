@@ -5,7 +5,7 @@ import { api } from "./ui";
 type Status = {
   sandbox: { name: string; ok: boolean; reason?: string };
   model: { name: string; ok: boolean; reason?: string };
-  storage?: { kind: string; durable: boolean };
+  storage?: { kind: string; durable: boolean; envHint?: string[] };
 };
 
 export function useIntegrationStatus() {
@@ -44,7 +44,12 @@ export function MissingConfigNotice({ status }: { status: Status | null }) {
       <ul className="mt-1 list-disc pl-5 text-warn/80">
         {!status.sandbox.ok && <li>CreateOS: {status.sandbox.reason}</li>}
         {!status.model.ok && <li>AI model: {status.model.reason}</li>}
-        {volatile && <li>Storage: projects are not shared between serverless instances (you may see &quot;Project not found&quot;). Add Upstash Redis in Vercel → Storage and redeploy.</li>}
+        {volatile && (
+          <li>
+            Storage: projects are not shared between serverless instances (you may see &quot;Project not found&quot;). Connect Upstash Redis in Vercel → Storage, then redeploy. Expected a pair like <code>KV_REST_API_URL</code> + <code>KV_REST_API_TOKEN</code> (any prefix).{" "}
+            {status.storage?.envHint?.length ? <>Found only: <code>{status.storage.envHint.join(", ")}</code>.</> : <>No Redis variables are visible to this deployment.</>}
+          </li>
+        )}
       </ul>
     </div>
   );

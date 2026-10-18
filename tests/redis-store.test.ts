@@ -49,3 +49,15 @@ describe("RedisStore (Upstash REST)", () => {
     await expect(new RedisStore("https://redis.test", "tok", fetchImpl).get("../etc")).rejects.toThrow(/Invalid/);
   });
 });
+
+describe("RedisStore.fromEnv", () => {
+  it("finds credentials under a Vercel-added prefix", () => {
+    expect(RedisStore.fromEnv({ STORAGE_KV_REST_API_URL: "https://x.upstash.io", STORAGE_KV_REST_API_TOKEN: "t" })).not.toBeNull();
+    expect(RedisStore.fromEnv({ UPSTASH_REDIS_REST_URL: "https://x.upstash.io", UPSTASH_REDIS_REST_TOKEN: "t" })).not.toBeNull();
+  });
+  it("ignores TCP-only URLs and missing tokens, and lists names only", () => {
+    expect(RedisStore.fromEnv({ REDIS_URL: "rediss://default:pw@x:6379" })).toBeNull();
+    expect(RedisStore.fromEnv({ KV_REST_API_URL: "https://x.upstash.io" })).toBeNull();
+    expect(RedisStore.envHint({ REDIS_URL: "secret", OTHER: "x" })).toEqual(["REDIS_URL"]);
+  });
+});

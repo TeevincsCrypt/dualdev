@@ -15,10 +15,23 @@ export class RedisStore implements Store {
 
   constructor(private readonly url: string, private readonly token: string, private readonly fetchImpl: typeof fetch = fetch) {}
 
-  static fromEnv(): RedisStore | null {
-    const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-    return url && token ? new RedisStore(url.replace(/\/+$/, ""), token) : null;
+  /**
+   * Finds Upstash REST credentials under any prefix Vercel may add when the
+   * database is connected (e.g. STORAGE_KV_REST_API_URL, MYDB_UPSTASH_REDIS_REST_URL).
+   */
+  static fromEnv(env: Record<string, string | undefined> = process.env): RedisStore | null {
+    for (const [key, url] of Object.entries(env)) {
+      const m = /^(.*?)(KV_REST_API|UPSTASH_REDIS_REST)_URL$/.exec(key);
+      if (!m || !url) continue;
+      const token = env[`${m[1]}${m[2]}_TOKEN`];
+      if (token && /^https:\/\//.test(url)) return new RedisStore(url.replace(/\/+$/, ""), token);
+    }
+    return null;
+  }
+
+  /** Names (never values) of Redis-looking env vars, to explain a missing connection. */
+  static envHint(env: Record<string, string | undefined> = process.env): string[] {
+    return Object.keys(env).filter((k) => /KV_|REDIS|UPSTASH/i.test(k)).sort();
   }
 
   private async cmd<T = unknown>(...args: (string | number)[]): Promise<T> {

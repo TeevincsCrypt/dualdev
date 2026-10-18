@@ -24,6 +24,8 @@ export interface AgentDeps {
   model: ModelProvider;
   fixtureDir: string;
   maxRepairAttempts?: number;
+  /** Names of storage-related env vars, shown when storage is not shared. */
+  storageHint?: () => string[];
 }
 
 // One sandbox per job: created on first use, shared by every check and repair
@@ -95,7 +97,7 @@ export class Agent {
     return {
       sandbox: { name: this.deps.sandbox.name, ...this.deps.sandbox.configured() },
       model: { name: this.deps.model.name, ...this.deps.model.configured() },
-      storage: { kind: this.deps.store.kind, durable: this.deps.store.durable },
+      storage: { kind: this.deps.store.kind, durable: this.deps.store.durable, ...(this.deps.store.durable ? {} : { envHint: this.deps.storageHint?.() ?? [] }) },
     };
   }
 
