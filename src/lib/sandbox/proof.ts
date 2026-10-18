@@ -71,7 +71,7 @@ export async function runCreateOSProof(sharedId?: string): Promise<ProofResult> 
     return { ...base, finishedAt: new Date().toISOString(), error: `Could not authenticate with CreateOS: ${redact(describe(e))}` };
   }
 
-  let sandbox: Sandbox;
+  let sandbox: Sandbox | undefined;
   let reused = false;
   try {
     // Reuse DUALDEV's shared sandbox when there is one: creations are capped per day.

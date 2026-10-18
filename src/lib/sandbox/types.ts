@@ -28,7 +28,6 @@ export const SANDBOX_NAME_PREFIX = "dualdev-";
 export function sandboxName(kind = "job"): string {
   // CreateOS caps names at 22 characters: "dualdev-" + kind initial + base36 time + 2 random = 20.
   return `${SANDBOX_NAME_PREFIX}${kind[0]}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 4)}`;
-}${kind}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 /** Quota errors detected by name/status, not instanceof (robust to duplicate module copies). */
