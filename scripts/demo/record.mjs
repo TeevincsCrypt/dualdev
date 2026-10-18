@@ -107,7 +107,12 @@ function speak(text, id) {
       execFileSync("say", ["-o", raw.replace(/\.wav$/, ".aiff"), "-f", txt], { stdio: "ignore" });
       ff(["-i", raw.replace(/\.wav$/, ".aiff"), raw], "aiff");
     } else {
-      execFileSync("espeak-ng", ["-s", "165", "-w", raw, "-f", txt], { stdio: "ignore" });
+      try {
+        execFileSync("espeak-ng", ["-s", "160", "-w", raw, "-f", txt], { stdio: "ignore" });
+      } catch {
+        // No espeak-ng binary: use the bundled library from `pip install espeakng-loader`.
+        execFileSync("python3", [path.join(path.dirname(new URL(import.meta.url).pathname), "tts_espeak.py"), raw, txt], { stdio: "ignore" });
+      }
     }
     ff(["-i", raw, "-ar", "44100", "-ac", "1", wav], "normalize voice");
     return wav;
