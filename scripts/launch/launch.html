@@ -1,0 +1,261 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face { font-family: "DM Sans"; font-weight: 400; src: url("../../node_modules/@fontsource/dm-sans/files/dm-sans-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family: "DM Sans"; font-weight: 500; src: url("../../node_modules/@fontsource/dm-sans/files/dm-sans-latin-500-normal.woff2") format("woff2"); }
+  @font-face { font-family: "DM Sans"; font-weight: 700; src: url("../../node_modules/@fontsource/dm-sans/files/dm-sans-latin-700-normal.woff2") format("woff2"); }
+  :root { --sage: #4f6f5b; --sage2: #8fae98; --ink: #1d1f1d; --bg: #f1f0eb; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); font-family: "DM Sans", sans-serif; color: var(--ink); }
+  #stage { position: absolute; inset: 0; overflow: hidden;
+    background: radial-gradient(900px 600px at 20% 15%, rgba(143,174,152,.30), transparent 70%), radial-gradient(800px 700px at 85% 80%, rgba(79,111,91,.18), transparent 70%), var(--bg); }
+  #grid { position: absolute; inset: -80px; opacity: .55;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><path d='M29 32h6M32 29v6' stroke='%238fae98' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
+  .p { position: absolute; border-radius: 6px; background: var(--sage2); }
+  .scene { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; }
+  .kicker { position: absolute; top: 120px; left: 0; right: 0; text-align: center; font-size: 64px; font-weight: 500; letter-spacing: -1.5px; }
+  .kicker b { color: var(--sage); font-weight: 700; }
+  /* chips */
+  .row { position: absolute; left: -400px; display: flex; gap: 22px; white-space: nowrap; }
+  .chip { display: inline-flex; align-items: center; gap: 12px; padding: 14px 24px; border-radius: 999px; background: #fff; box-shadow: 0 6px 18px rgba(30,40,30,.08); font-size: 26px; font-weight: 500; }
+  .chip i { width: 22px; height: 22px; border-radius: 50%; display: inline-block; }
+  /* mark */
+  .halo { position: absolute; width: 760px; height: 760px; border-radius: 50%; background: radial-gradient(circle, rgba(241,240,235,1) 35%, rgba(241,240,235,0) 70%); }
+  .mark { position: absolute; width: 380px; height: 380px; filter: drop-shadow(0 30px 40px rgba(79,111,91,.35)); }
+  /* prompt */
+  .prompt { width: 1240px; height: 132px; border-radius: 999px; background: #fff; box-shadow: 0 24px 60px rgba(30,40,30,.12); display: flex; align-items: center; padding: 0 22px 0 52px; font-size: 40px; }
+  .prompt .txt { flex: 1; white-space: nowrap; overflow: hidden; }
+  .caret { display: inline-block; width: 3px; height: 46px; background: var(--sage); vertical-align: -8px; margin-left: 4px; }
+  .btn { height: 92px; padding: 0 44px; border-radius: 999px; background: var(--sage); color: #fff; font-size: 34px; font-weight: 700; display: grid; place-items: center; }
+  /* cards */
+  .card3d { width: 1100px; height: 640px; border-radius: 36px; background: #15171a; box-shadow: 0 60px 120px rgba(20,30,20,.35); overflow: hidden; position: relative; }
+  .site { position: absolute; inset: 0; background: #faf7f2; color: #2a1f17; opacity: 0; }
+  .site nav { display: flex; justify-content: space-between; align-items: center; padding: 30px 48px; font-size: 22px; }
+  .site nav b { font-size: 28px; }
+  .site .hero { margin: 26px 48px; height: 300px; border-radius: 28px; background: linear-gradient(120deg, #3b2a1f, #7a4e2d); color: #fff; padding: 54px; }
+  .site .hero h1 { font-size: 64px; letter-spacing: -2px; line-height: 1; }
+  .site .hero p { font-size: 24px; opacity: .8; margin-top: 16px; }
+  .site .hero span { display: inline-block; margin-top: 26px; padding: 14px 30px; border-radius: 999px; background: #f2c38b; color: #2a1f17; font-weight: 700; font-size: 22px; }
+  .site .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin: 0 48px; }
+  .site .cards div { height: 150px; border-radius: 22px; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.06); padding: 24px; font-size: 22px; font-weight: 700; }
+  .site .cards small { display: block; font-weight: 400; color: #8a7a6d; margin-top: 8px; font-size: 18px; }
+  .term { width: 1100px; border-radius: 32px; background: #15171a; color: #d8e0da; box-shadow: 0 60px 120px rgba(20,30,20,.3); padding: 44px 56px; font-family: ui-monospace, Menlo, monospace; font-size: 32px; line-height: 1.9; }
+  .term .bar { display: flex; align-items: center; gap: 16px; font-family: "DM Sans"; font-size: 24px; color: #9aa59d; margin-bottom: 18px; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; background: #39e07a; box-shadow: 0 0 24px 8px rgba(57,224,122,.55); }
+  .ln { opacity: 0; white-space: nowrap; }
+  .ok { color: #6ee7a0; } .bad { color: #ff8a80; } .dim { color: #7c867f; }
+  .diff { width: 1100px; border-radius: 32px; background: #fff; box-shadow: 0 50px 100px rgba(20,30,20,.18); overflow: hidden; font-family: ui-monospace, Menlo, monospace; font-size: 25px; }
+  .diff .hd { padding: 26px 40px; border-bottom: 1px solid #eceae4; font-family: "DM Sans"; font-size: 24px; color: #6b716c; display: flex; justify-content: space-between; }
+  .diff .l { padding: 6px 40px; white-space: nowrap; }
+  .diff .add { background: rgba(47,138,87,.12); color: #2f8a57; opacity: 0; }
+  .pill { display: inline-flex; align-items: center; gap: 14px; padding: 18px 34px; border-radius: 999px; font-size: 34px; font-weight: 700; }
+  .giant { position: absolute; top: 50%; left: 0; font-size: 420px; font-weight: 700; letter-spacing: -18px; color: var(--sage); white-space: nowrap; transform: translateY(-55%); }
+  .end { text-align: center; }
+  .word { font-size: 150px; font-weight: 700; letter-spacing: -6px; line-height: 1; }
+  .word span { color: var(--sage); }
+  .tag { font-size: 40px; color: #5d635e; margin-top: 18px; }
+  .cta { display: inline-block; margin-top: 40px; padding: 22px 46px; border-radius: 999px; background: var(--sage); color: #fff; font-size: 34px; font-weight: 700; box-shadow: 0 16px 40px rgba(79,111,91,.35); }
+  .small { margin-top: 26px; font-size: 26px; color: #959a95; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+  <div id="particles"></div>
+
+  <!-- 1: every idea -->
+  <div class="scene" id="s1">
+    <div class="kicker">every <b>idea</b></div>
+    <div id="rows"></div>
+    <div class="halo"></div>
+    <svg class="mark" id="mark1" viewBox="0 0 64 64"></svg>
+  </div>
+
+  <!-- 2: describe it -->
+  <div class="scene" id="s2">
+    <div class="kicker">just <b>describe it</b></div>
+    <div class="prompt" id="prompt"><div class="txt"><span id="typed"></span><span class="caret" id="caret"></span></div><div class="btn" id="build">Build it</div></div>
+  </div>
+
+  <!-- 3: builds it -->
+  <div class="scene" id="s3" style="perspective: 1800px">
+    <div class="kicker">dualdev <b>builds it</b></div>
+    <div class="card3d" id="card" style="margin-top: 120px">
+      <div class="site" id="site">
+        <nav><b>Ember &amp; Oak</b><span>Menu · Story · Visit</span></nav>
+        <div class="hero"><h1>Slow-roasted.<br />Fast mornings.</h1><p>Specialty coffee, baked goods and a corner to think.</p><span>Order ahead</span></div>
+        <div class="cards"><div>Single origin<small>Rotating weekly</small></div><div>Oat flat white<small>House favourite</small></div><div>Open 7–19<small>Every day</small></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4: runs it in a real sandbox -->
+  <div class="scene" id="s4">
+    <div class="kicker">runs it in a <b>real sandbox</b></div>
+    <div class="term" style="margin-top: 140px">
+      <div class="bar"><span class="dot" id="dot"></span>createos sandbox · running</div>
+      <div class="ln" id="l1"><span class="dim">$</span> upload 7 files → /root/app</div>
+      <div class="ln" id="l2"><span class="dim">$</span> node --check <span class="ok">✓ compiles</span></div>
+      <div class="ln" id="l3"><span class="dim">$</span> node --test</div>
+      <div class="ln" id="l4"><span class="ok">✓ 5 passed</span> &nbsp;<span class="bad">✗ 1 failed</span> <span class="dim">— counter not updated</span></div>
+    </div>
+  </div>
+
+  <!-- 5: fixes what fails -->
+  <div class="scene" id="s5">
+    <div class="kicker">and <b>fixes what fails</b></div>
+    <div style="margin-top: 140px; display: grid; gap: 40px; justify-items: center">
+      <div class="diff">
+        <div class="hd"><span>src/tasks.js</span><span>bug hunter · attempt 1</span></div>
+        <div class="l" style="color:#9aa09b">  task.completed = !task.completed;</div>
+        <div class="l add" id="a1">+ if (task.completed) { stats.pending--; stats.completed++; }</div>
+        <div class="l add" id="a2">+ else { stats.pending++; stats.completed--; }</div>
+        <div class="l" style="color:#9aa09b">  return task;</div>
+      </div>
+      <div class="pill" id="result" style="background:#fde8e8;color:#c94a4a">5 / 6 passing</div>
+    </div>
+  </div>
+
+  <!-- 6: giant word -->
+  <div class="scene" id="s6"><div class="giant" id="giant">build &amp; fix</div><div id="rows6"></div></div>
+
+  <!-- 7: end card -->
+  <div class="scene" id="s7">
+    <div class="end">
+      <svg id="mark7" viewBox="0 0 64 64" style="width:180px;height:180px;filter:drop-shadow(0 20px 30px rgba(79,111,91,.35))"></svg>
+      <div class="word" style="margin-top:24px">dual<span>dev</span></div>
+      <div class="tag">one AI. two superpowers. build and fix.</div>
+      <div class="cta">live now · dualdev.vercel.app</div>
+      <div class="small">built on CreateOS · payments by Stripe</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const seg = (t, a, b) => clamp((t - a) / (b - a));
+  const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+  const easeInOut = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+  const back = (x) => { const c = 1.70158; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+
+  // Glossy DualDev mark: two halves (Build, Fix) around a shared core.
+  const MARK = `<defs>
+      <linearGradient id="gA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6f9479"/><stop offset="1" stop-color="#3f5c49"/></linearGradient>
+      <linearGradient id="gB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c3d8c8"/><stop offset="1" stop-color="#83a58d"/></linearGradient>
+      <linearGradient id="gl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+    <path d="M29 12a20 20 0 0 0 0 40z" fill="url(#gA)"/><path d="M35 12a20 20 0 0 1 0 40z" fill="url(#gB)"/>
+    <path d="M29 12a20 20 0 0 0 -19 14h19z" fill="url(#gl)"/><path d="M35 12a20 20 0 0 1 19 14h-19z" fill="url(#gl)"/>
+    <circle cx="32" cy="32" r="5" fill="#f1f0eb"/><circle cx="32" cy="32" r="2.5" fill="#1d1f1d"/>`;
+  $("mark1").innerHTML = MARK;
+  $("mark7").innerHTML = MARK;
+
+  // Idea chips.
+  const IDEAS = ["landing page", "habit tracker", "expense app", "portfolio", "booking form", "todo list", "dashboard", "quiz game", "inventory", "recipe box", "pricing page", "blog", "event rsvp", "budget planner", "waitlist", "crm lite"];
+  const COLORS = ["#4f6f5b", "#8fae98", "#e3b25b", "#c97b5b", "#6b8fb3", "#a389c9"];
+  function makeRows(host, n, seed) {
+    for (let r = 0; r < n; r++) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.style.top = `${250 + r * 108}px`;
+      for (let i = 0; i < 14; i++) {
+        const k = (i * 5 + r * 3 + seed) % IDEAS.length;
+        row.insertAdjacentHTML("beforeend", `<span class="chip"><i style="background:${COLORS[(i + r) % COLORS.length]}"></i>${IDEAS[k]}</span>`);
+      }
+      host.appendChild(row);
+    }
+  }
+  makeRows($("rows"), 7, 0);
+  makeRows($("rows6"), 7, 7);
+
+  // Floating particles.
+  const PARTS = [];
+  for (let i = 0; i < 26; i++) {
+    const d = document.createElement("div");
+    d.className = "p";
+    const s = 8 + ((i * 37) % 14);
+    d.style.width = d.style.height = s + "px";
+    d.style.opacity = (0.25 + ((i * 13) % 50) / 100).toFixed(2);
+    $("particles").appendChild(d);
+    PARTS.push({ el: d, x: (i * 263) % 1920, y: (i * 419) % 1080, sp: 0.4 + ((i * 7) % 10) / 10, ph: i });
+  }
+
+  const PROMPT = "a landing page for my coffee shop";
+  const SCENES = [["s1", 0, 3.2], ["s2", 3.2, 6.2], ["s3", 6.2, 9.6], ["s4", 9.6, 13.1], ["s5", 13.1, 16.6], ["s6", 16.6, 19.4], ["s7", 19.4, 99]];
+
+  window.render = function (t) {
+    $("grid").style.transform = `translate(${(t * 14) % 64}px, ${(t * 9) % 64}px)`;
+    for (const p of PARTS) {
+      const y = (p.y - t * 40 * p.sp + 1080 * 4) % 1180 - 50;
+      p.el.style.transform = `translate(${p.x + Math.sin(t * p.sp + p.ph) * 30}px, ${y}px) rotate(${t * 30 * p.sp + p.ph * 20}deg)`;
+    }
+    for (const [id, a, b] of SCENES) {
+      const inn = easeOut(seg(t, a, a + 0.45));
+      const out = b > 90 ? 0 : easeInOut(seg(t, b - 0.35, b));
+      const v = t >= a - 0.01 && t < b + 0.01 ? inn * (1 - out) : 0;
+      const el = $(id);
+      el.style.opacity = v.toFixed(3);
+      el.style.filter = `blur(${((1 - inn) * 14 + out * 18).toFixed(1)}px)`;
+      el.style.transform = `scale(${(0.96 + 0.04 * inn + out * 0.06).toFixed(4)})`;
+    }
+
+    // 1: chips drift, mark pops in and wobbles
+    [...$("rows").children].forEach((row, r) => {
+      const dir = r % 2 ? -1 : 1;
+      row.style.transform = `translateX(${dir * (t * 60) + (r % 2 ? -200 : 0)}px)`;
+      row.style.opacity = (0.35 + 0.65 * easeOut(seg(t, 0.05 * r, 0.5 + 0.05 * r))).toFixed(2);
+    });
+    const m = back(seg(t, 0.5, 1.3));
+    $("mark1").style.transform = `scale(${m}) rotateY(${Math.sin(t * 2) * 18}deg) rotate(${Math.sin(t * 1.3) * 6}deg)`;
+
+    // 2: typing
+    const typed = Math.floor(PROMPT.length * seg(t, 3.7, 5.4));
+    $("typed").textContent = PROMPT.slice(0, typed);
+    $("caret").style.opacity = Math.floor(t * 3) % 2 ? 1 : 0.2;
+    const press = seg(t, 5.55, 5.75);
+    $("build").style.transform = `scale(${1 - 0.08 * Math.sin(press * Math.PI)})`;
+
+    // 3: card flies in, flattens, site fades in
+    const c = easeOut(seg(t, 6.3, 7.6));
+    $("card").style.transform = `translateY(${(1 - c) * 300}px) rotateX(${(1 - c) * 38}deg) rotateY(${(1 - c) * -24}deg) rotateZ(${(1 - c) * 6}deg)`;
+    $("site").style.opacity = easeOut(seg(t, 7.6, 8.3));
+
+    // 4: terminal lines, pulsing dot
+    ["l1", "l2", "l3", "l4"].forEach((id, i) => {
+      const k = easeOut(seg(t, 10.1 + i * 0.55, 10.4 + i * 0.55));
+      $(id).style.opacity = k;
+      $(id).style.transform = `translateX(${(1 - k) * -30}px)`;
+    });
+    $("dot").style.transform = `scale(${1 + 0.18 * Math.sin(t * 8)})`;
+
+    // 5: diff lines, result pill flips green
+    ["a1", "a2"].forEach((id, i) => ($(id).style.opacity = easeOut(seg(t, 13.6 + i * 0.35, 13.9 + i * 0.35))));
+    const ok = t > 15.2;
+    const pill = $("result");
+    pill.textContent = ok ? "✓  6 / 6 passing · verified" : "5 / 6 passing";
+    pill.style.background = ok ? "#e1f2e7" : "#fde8e8";
+    pill.style.color = ok ? "#2f8a57" : "#c94a4a";
+    pill.style.transform = `scale(${ok ? back(seg(t, 15.2, 15.6)) : 1})`;
+
+    // 6: giant word sweeps with motion blur
+    const g = seg(t, 16.6, 19.4);
+    const x = 1920 - easeInOut(g) * 3600;
+    const speed = Math.abs(Math.sin(g * Math.PI));
+    $("giant").style.transform = `translate(${x}px, -55%)`;
+    $("giant").style.filter = `blur(${(speed * 22).toFixed(1)}px)`;
+    $("giant").style.opacity = 0.85;
+    [...$("rows6").children].forEach((row, r) => {
+      row.style.transform = `translateX(${(r % 2 ? -1 : 1) * t * 90 - 600}px)`;
+      row.style.opacity = 0.35;
+    });
+
+    // 7: end card
+    const e = back(seg(t, 19.5, 20.3));
+    $("mark7").style.transform = `scale(${e}) rotateY(${Math.sin(t * 1.6) * 14}deg)`;
+  };
+  render(0);
+</script>
+</body>
+</html>

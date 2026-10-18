@@ -138,8 +138,18 @@ if (VOICE) {
 
 // ---------- 2. record the real site ----------
 console.log(`Recording ${SITE} …`);
-const browser = await chromium.launch({ executablePath: process.env.DEMO_CHROMIUM || undefined });
-const context = await browser.newContext({ viewport: { width: W, height: H }, recordVideo: { dir: WORK, size: { width: W, height: H } } });
+// Behind an egress proxy (e.g. a cloud container), route the browser through it; the proxy
+// re-signs TLS, so certificate errors are ignored for the recording session only.
+const proxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+const browser = await chromium.launch({
+  executablePath: process.env.DEMO_CHROMIUM || undefined,
+  ...(proxy ? { proxy: { server: proxy, bypass: "localhost,127.0.0.1" } } : {}),
+});
+const context = await browser.newContext({
+  viewport: { width: W, height: H },
+  recordVideo: { dir: WORK, size: { width: W, height: H } },
+  ...(proxy ? { ignoreHTTPSErrors: true } : {}),
+});
 // Visible cursor (videos do not capture the OS cursor).
 await context.addInitScript(() => {
   addEventListener("DOMContentLoaded", () => {

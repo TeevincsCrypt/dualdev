@@ -11,7 +11,7 @@ import wave
 import espeakng_loader
 
 out, txt = sys.argv[1], sys.argv[2]
-voice = sys.argv[3] if len(sys.argv) > 3 else "en-us+f3"
+voice = sys.argv[3] if len(sys.argv) > 3 else "en-us+Annie"
 text = open(txt, encoding="utf-8").read().strip()
 
 lib = ctypes.CDLL(espeakng_loader.get_library_path())
